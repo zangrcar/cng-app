@@ -137,10 +137,21 @@ Actual navigation is delegated to Google Maps in v1.
 
 User can search for another location.
 
+Place search uses Photon/OpenStreetMap for typo-tolerant results and occurs
+only after an explicit keyboard or button submission; there is no autocomplete
+or typeahead. Exact name matches are promoted ahead of prefix, contains, and
+fuzzy matches while preserving Photon order within each group.
+
+Use of the public service remains conservative:
+- no more than one HTTP request may start per second;
+- requests identify the app with a custom User-Agent;
+- repeated normalized queries are cached for the app session;
+- search results show OpenStreetMap contributor attribution.
+
 Selecting it:
 - moves camera there;
-- uses approximately the normal 30 km initial scale;
-- shows stations in that area.
+- uses the accepted nearby zoom 10.5;
+- automatically searches the resulting visible viewport for local stations.
 
 The user can then pan/zoom and use Search this area.
 

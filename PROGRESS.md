@@ -24,7 +24,7 @@ android-native
 - [x] 2. GPS/current-location support + recenter action
 - [x] 3. Local Room database + MIMIT station-data refresh + data-status UI
 - [x] 4. Show local stations for map viewport + Search this area + clustering
-- [ ] 5. Station bottom sheet + live details + Google Maps navigation
+- [x] 5. Station bottom sheet + live details + Google Maps navigation
 - [ ] 6. Search for another place
 - [ ] 7. A -> B route mode + stations along route
 - [ ] 8. Offline/polish/testing on real phone
@@ -39,7 +39,9 @@ Phase 4 is complete and physically verified.
 
 Phase 5A local station selection/details is physically verified.
 
-Phase 5B best-effort live MIMIT enrichment is implemented and build-verified, awaiting physical-device verification.
+Phase 5 is complete and physically verified.
+
+Phase 6 Photon place search is implemented and build-verified, awaiting physical-device verification.
 
 Implemented:
 - MapLibre Native Android 13.3.1 using the explicit OpenGL `android-sdk-opengl` artifact
@@ -217,8 +219,8 @@ Phase 5B live MIMIT enrichment (2026-08-31):
 - total unit tests: 49 PASS
 - `./gradlew.bat test`: PASS
 - `./gradlew.bat assembleDebug`: PASS
-- Phase 5B physical-device verification: pending
-- full Phase 5 remains incomplete
+- Phase 5B physical-device verification: PASS
+- full Phase 5 complete
 
 Phase 5B opening-hours presentation cleanup (2026-08-31):
 - UNKNOWN current opening status is now omitted rather than displaying an unavailable/unknown message; confident OPEN/CLOSED status and transition details remain unchanged
@@ -227,6 +229,38 @@ Phase 5B opening-hours presentation cleanup (2026-08-31):
 - added 7 focused presentation tests; total unit tests: 56 PASS
 - `./gradlew.bat test`: PASS
 - `./gradlew.bat assembleDebug`: PASS
+
+Phase 6 place search (2026-08-31):
+- compact top-left place-search control opens a Material 3 sheet without moving the map
+- searches occur only on explicit keyboard/button submission; no autocomplete requests are made
+- Photon requests are restricted to Italy, request up to 10 typo-tolerant candidates, identify the app, and include JSON/device-language headers; local ranking returns the best five
+- the client enforces at least one second between HTTP request starts and caches 32 normalized successful queries for the app session
+- selecting a result dismisses the sheet, animates to zoom 10.5 without enabling tracking, and automatically searches the resulting Room viewport
+- offline and request failures remain inline in the sheet; existing local map/station behavior remains usable
+- Phase 5 station-selection cancellation now propagates `CancellationException`
+- added focused unit tests for defensive GeoJSON parsing, coordinate ordering, label deduplication, match ranking, and normalized cache keys
+- `./gradlew.bat test`: PASS
+- `./gradlew.bat assembleDebug`: PASS
+- Phase 6 physical-device verification: pending
+
+Phase 6 search UX and typo-tolerance correction (2026-08-31):
+- Photon/OpenStreetMap is the single geocoder, requesting up to 10 Italy-only typo-tolerant candidates before locally returning the best five
+- exact-name results rank ahead of prefix, contains, and fuzzy results while Photon order is retained within each group
+- Photon GeoJSON parsing reads longitude/latitude in documented order, builds deduplicated display labels, and skips malformed features
+- Android Back hides the visible keyboard and clears field focus before a later Back dismisses the search sheet
+- keyboard and button submissions hide the keyboard before searching; dismissal and result selection clear query/results/error/loading UI state while retaining the session network cache
+- explicit submission, the identifying User-Agent, normalized 32-query session cache, and conservative one-request-per-second limiter remain in place
+- replaced the earlier geocoder tests with 11 focused Photon parsing, coordinate-order, display-label, ranking, typo-retention, and normalization tests; total unit tests: 67 PASS
+- `./gradlew.bat test`: PASS
+- `./gradlew.bat assembleDebug`: PASS
+- Phase 6 physical-device verification remains pending
+
+Phase 6 place-search Back correction (2026-08-31):
+- the place-search sheet disables Material's direct Back dismissal; while the IME is visible Android handles Back to hide it, and the sheet BackHandler becomes enabled only after the IME is hidden
+- scrim-tap and swipe-down dismissal remain enabled and continue clearing search UI state
+- `./gradlew.bat test`: PASS
+- `./gradlew.bat assembleDebug`: PASS
+- physical-device verification: pending
 
 ## Important discoveries
 

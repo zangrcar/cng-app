@@ -18,6 +18,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.zangrcar.cngitaly.data.MapBounds
+import com.zangrcar.cngitaly.data.geocoding.PlaceSearchResult
 import com.zangrcar.cngitaly.ui.MapScreen
 import com.zangrcar.cngitaly.ui.map.StationMapLayer
 import com.zangrcar.cngitaly.ui.theme.CNGItalyTheme
@@ -158,6 +159,7 @@ class MainActivity : ComponentActivity() {
                     onCurrentLocationClick = ::onCurrentLocationClick,
                     searchAreaVisible = searchAreaVisible,
                     onSearchThisAreaClick = { searchCurrentViewport(true) },
+                    onPlaceSelected = ::centerMapOnPlace,
                     viewModel = mainViewModel
                 )
             }
@@ -258,7 +260,9 @@ class MainActivity : ComponentActivity() {
         hasCenteredOnLocation = true
         val map = map ?: return
         searchAreaVisible = false
-        map.locationComponent.cameraMode = CameraMode.NONE
+        if (map.locationComponent.isLocationComponentActivated) {
+            map.locationComponent.cameraMode = CameraMode.NONE
+        }
         map.animateCamera(
             CameraUpdateFactory.newLatLngZoom(
                 LatLng(location.latitude, location.longitude),
@@ -270,6 +274,23 @@ class MainActivity : ComponentActivity() {
                     searchCurrentViewport(false)
                 }
 
+                override fun onCancel() = Unit
+            }
+        )
+    }
+
+    private fun centerMapOnPlace(place: PlaceSearchResult) {
+        val map = map ?: return
+        searchAreaVisible = false
+        map.locationComponent.cameraMode = CameraMode.NONE
+        map.animateCamera(
+            CameraUpdateFactory.newLatLngZoom(
+                LatLng(place.latitude, place.longitude),
+                10.5
+            ),
+            700,
+            object : MapLibreMap.CancelableCallback {
+                override fun onFinish() = searchCurrentViewport(false)
                 override fun onCancel() = Unit
             }
         )

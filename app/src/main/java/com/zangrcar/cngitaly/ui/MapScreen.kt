@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,21 +39,34 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.activity.compose.BackHandler
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -65,6 +81,7 @@ import com.zangrcar.cngitaly.data.mimit.LiveStationDetails
 import com.zangrcar.cngitaly.data.mimit.OpeningHoursEntry
 import com.zangrcar.cngitaly.data.mimit.liveOpenStatus
 import com.zangrcar.cngitaly.data.mimit.openingHoursLabel
+import com.zangrcar.cngitaly.data.geocoding.PlaceSearchResult
 import kotlinx.coroutines.launch
 import org.maplibre.android.maps.MapView
 import java.time.DayOfWeek
@@ -86,6 +103,7 @@ fun MapScreen(
     onCurrentLocationClick: () -> Unit,
     searchAreaVisible: Boolean,
     onSearchThisAreaClick: () -> Unit,
+    onPlaceSelected: (PlaceSearchResult) -> Unit,
     viewModel: MainViewModel
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -99,6 +117,19 @@ fun MapScreen(
     val isLiveDetailsLoading =
         viewModel.isLiveDetailsLoading.collectAsStateWithLifecycle().value
     val context = LocalContext.current
+    var showPlaceSearch by remember { mutableStateOf(false) }
+    var placeQuery by remember { mutableStateOf("") }
+    val placeResults = viewModel.placeResults.collectAsStateWithLifecycle().value
+    val isPlaceSearchLoading =
+        viewModel.isPlaceSearchLoading.collectAsStateWithLifecycle().value
+    val placeSearchError = viewModel.placeSearchError.collectAsStateWithLifecycle().value
+    val hasSubmittedPlaceSearch =
+        viewModel.hasSubmittedPlaceSearch.collectAsStateWithLifecycle().value
+    val closePlaceSearch: () -> Unit = {
+        placeQuery = ""
+        showPlaceSearch = false
+        viewModel.clearPlaceSearch()
+    }
 
     LaunchedEffect(locationMessage) {
         locationMessage?.let {
@@ -110,7 +141,8 @@ fun MapScreen(
         viewModel.messages.collect { snackbarHostState.showSnackbar(it) }
     }
     BackHandler(
-        enabled = drawerState.isOpen && selectedStation == null && !isStationDetailsLoading
+        enabled = drawerState.isOpen && selectedStation == null && !isStationDetailsLoading &&
+            !showPlaceSearch
     ) {
         coroutineScope.launch { drawerState.close() }
     }
@@ -154,6 +186,22 @@ fun MapScreen(
                         }
                     }
                 )
+                Spacer(Modifier.height(8.dp))
+                FilledIconButton(
+                    onClick = {
+                        viewModel.clearSelectedStation()
+                        viewModel.clearPlaceSearch()
+                        placeQuery = ""
+                        showPlaceSearch = true
+                    },
+                    modifier = Modifier.size(48.dp),
+                    colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color.Black,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(Icons.Default.Search, "Search place")
+                }
             }
             if (searchAreaVisible) {
                 Button(
@@ -202,6 +250,125 @@ fun MapScreen(
                 }
             )
         }
+    }
+
+    if (showPlaceSearch) {
+        ModalBottomSheet(
+            onDismissRequest = closePlaceSearch,
+            properties = ModalBottomSheetProperties(
+                shouldDismissOnBackPress = false
+            )
+        ) {
+            PlaceSearchContent(
+                query = placeQuery,
+                onQueryChange = { placeQuery = it },
+                onSearch = { viewModel.searchPlaces(placeQuery) },
+                results = placeResults,
+                isLoading = isPlaceSearchLoading,
+                error = placeSearchError,
+                hasSubmitted = hasSubmittedPlaceSearch,
+                onDismiss = closePlaceSearch,
+                onResultSelected = { result ->
+                    closePlaceSearch()
+                    onPlaceSelected(result)
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaceSearchContent(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    results: List<PlaceSearchResult>,
+    isLoading: Boolean,
+    error: String?,
+    hasSubmitted: Boolean,
+    onDismiss: () -> Unit,
+    onResultSelected: (PlaceSearchResult) -> Unit
+) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val submitSearch = {
+        focusManager.clearFocus()
+        keyboardController?.hide()
+        onSearch()
+    }
+    BackHandler(enabled = !imeVisible) {
+        onDismiss()
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 640.dp)
+            .navigationBarsPadding()
+            .padding(horizontal = 24.dp, vertical = 8.dp)
+    ) {
+        Text("Search place", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(16.dp))
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text("Italian place or address") },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(
+                onSearch = { if (query.isNotBlank()) submitSearch() }
+            )
+        )
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = submitSearch,
+            enabled = query.isNotBlank() && !isLoading,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                Spacer(Modifier.size(8.dp))
+            }
+            Text("Search")
+        }
+        Spacer(Modifier.height(12.dp))
+        error?.let {
+            Text(it, color = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.height(8.dp))
+        }
+        if (!isLoading && error == null && hasSubmitted && results.isEmpty()) {
+            Text("No places found.")
+            Spacer(Modifier.height(8.dp))
+        }
+        results.take(5).forEach { result ->
+            Text(
+                text = result.displayName,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
+                        onResultSelected(result)
+                    }
+                    .padding(vertical = 14.dp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        Text(
+            "Search data © OpenStreetMap contributors",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            "Geocoding: Photon",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(16.dp))
     }
 }
 

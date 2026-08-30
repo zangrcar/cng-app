@@ -15,6 +15,8 @@ import com.zangrcar.cngitaly.data.local.CngDatabase
 import com.zangrcar.cngitaly.data.local.DatasetMetaEntity
 import com.zangrcar.cngitaly.data.mimit.LiveStationDetails
 import com.zangrcar.cngitaly.data.mimit.MimitLiveClient
+import com.zangrcar.cngitaly.data.geocoding.PhotonClient
+import com.zangrcar.cngitaly.data.geocoding.PlaceSearchResult
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,6 +42,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val database = CngDatabase.getInstance(application)
     private val repository = StationRepository(database.stationDao())
     private val liveClient = MimitLiveClient()
+    private val photonClient = PhotonClient()
     private val connectivityManager =
         application.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     private val online = MutableStateFlow(hasValidatedInternet())
@@ -56,6 +59,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isLiveDetailsLoading = MutableStateFlow(false)
     val isLiveDetailsLoading = _isLiveDetailsLoading.asStateFlow()
     private var stationDetailsJob: Job? = null
+    private var placeSearchJob: Job? = null
+    private val _placeResults = MutableStateFlow<List<PlaceSearchResult>>(emptyList())
+    val placeResults = _placeResults.asStateFlow()
+    private val _isPlaceSearchLoading = MutableStateFlow(false)
+    val isPlaceSearchLoading = _isPlaceSearchLoading.asStateFlow()
+    private val _placeSearchError = MutableStateFlow<String?>(null)
+    val placeSearchError = _placeSearchError.asStateFlow()
+    private val _hasSubmittedPlaceSearch = MutableStateFlow(false)
+    val hasSubmittedPlaceSearch = _hasSubmittedPlaceSearch.asStateFlow()
     private var lastSearchedBounds: MapBounds? = null
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -164,6 +176,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                 }
+            } catch (exception: CancellationException) {
+                throw exception
             } catch (_: Exception) {
                 _messages.emit("Unable to load station details.")
             } finally {
@@ -179,6 +193,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _isLiveDetailsLoading.value = false
         _selectedStation.value = null
         _liveStationDetails.value = null
+    }
+
+    fun searchPlaces(query: String) {
+        val submitted = query.trim()
+        if (submitted.isEmpty()) return
+        placeSearchJob?.cancel()
+        _placeResults.value = emptyList()
+        _placeSearchError.value = null
+        _hasSubmittedPlaceSearch.value = true
+        if (!online.value) {
+            _isPlaceSearchLoading.value = false
+            _placeSearchError.value = "Place search requires internet."
+            return
+        }
+        placeSearchJob = viewModelScope.launch {
+            _isPlaceSearchLoading.value = true
+            try {
+                _placeResults.value = photonClient.search(submitted)
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                _placeSearchError.value = "Place search unavailable. Try again."
+            } finally {
+                _isPlaceSearchLoading.value = false
+            }
+        }
+    }
+
+    fun clearPlaceSearch() {
+        placeSearchJob?.cancel()
+        placeSearchJob = null
+        _placeResults.value = emptyList()
+        _placeSearchError.value = null
+        _isPlaceSearchLoading.value = false
+        _hasSubmittedPlaceSearch.value = false
     }
 
     override fun onCleared() {

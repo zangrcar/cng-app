@@ -19,6 +19,9 @@ class StationRepository(
     suspend fun getStoredStationCounts(): Pair<Int?, Int> =
         dao.getMeta()?.stationCount to dao.getStationCount()
 
+    suspend fun getStationDetails(stationId: Int): StationDetails? =
+        dao.getStationWithPrices(stationId)?.toStationDetails()
+
     suspend fun getStationsInBounds(bounds: MapBounds): List<MapStation> {
         val roomStations = dao.getStationsInBounds(
             north = bounds.north,

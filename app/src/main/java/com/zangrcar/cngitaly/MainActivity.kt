@@ -100,7 +100,11 @@ class MainActivity : ComponentActivity() {
             map.setStyle("https://tiles.openfreemap.org/styles/liberty") { style ->
                 loadedStyle = style
                 stationMapLayer?.destroy()
-                stationMapLayer = StationMapLayer(map, style).also {
+                stationMapLayer = StationMapLayer(
+                    map = map,
+                    style = style,
+                    onStationSelected = mainViewModel::selectStation
+                ).also {
                     val stations = mainViewModel.stations.value
                     if (!it.update(stations) && stations.isNotEmpty()) searchAreaVisible = true
                 }

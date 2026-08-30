@@ -19,7 +19,8 @@ import com.zangrcar.cngitaly.data.MapStation
 
 class StationMapLayer(
     private val map: MapLibreMap,
-    style: Style
+    style: Style,
+    private val onStationSelected: (Int) -> Unit
 ) : MapLibreMap.OnMapClickListener {
     init {
         style.addSource(
@@ -101,20 +102,32 @@ class StationMapLayer(
     }
 
     override fun onMapClick(point: LatLng): Boolean {
+        val screenPoint = map.projection.toScreenLocation(point)
         val cluster = map.queryRenderedFeatures(
-            map.projection.toScreenLocation(point),
+            screenPoint,
             CLUSTER_CIRCLE_LAYER_ID
+        ).firstOrNull()
+        if (cluster != null) {
+            val clusterPoint = cluster.geometry() as? Point ?: return false
+            val source = map.style?.getSourceAs<GeoJsonSource>(SOURCE_ID) ?: return false
+            val expansionZoom = source.getClusterExpansionZoom(cluster)
+            map.animateCamera(
+                CameraUpdateFactory.newLatLngZoom(
+                    LatLng(clusterPoint.latitude(), clusterPoint.longitude()),
+                    expansionZoom.toDouble()
+                ),
+                500
+            )
+            return true
+        }
+
+        val station = map.queryRenderedFeatures(
+            screenPoint,
+            STATION_PRICE_LAYER_ID,
+            STATION_CIRCLE_LAYER_ID
         ).firstOrNull() ?: return false
-        val clusterPoint = cluster.geometry() as? Point ?: return false
-        val source = map.style?.getSourceAs<GeoJsonSource>(SOURCE_ID) ?: return false
-        val expansionZoom = source.getClusterExpansionZoom(cluster)
-        map.animateCamera(
-            CameraUpdateFactory.newLatLngZoom(
-                LatLng(clusterPoint.latitude(), clusterPoint.longitude()),
-                expansionZoom.toDouble()
-            ),
-            500
-        )
+        val stationId = station.getNumberProperty("stationId")?.toInt() ?: return false
+        onStationSelected(stationId)
         return true
     }
 

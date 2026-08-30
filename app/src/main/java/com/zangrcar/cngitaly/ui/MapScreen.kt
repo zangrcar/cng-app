@@ -1,5 +1,8 @@
 package com.zangrcar.cngitaly.ui
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -9,11 +12,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -25,9 +31,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.SnackbarHost
@@ -41,11 +49,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.activity.compose.BackHandler
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zangrcar.cngitaly.MainUiState
 import com.zangrcar.cngitaly.MainViewModel
+import com.zangrcar.cngitaly.data.StationDetails
+import com.zangrcar.cngitaly.data.StationPrice
 import kotlinx.coroutines.launch
 import org.maplibre.android.maps.MapView
 import java.time.Instant
@@ -58,6 +70,7 @@ import java.util.Locale
 internal enum class DataStatus { FRESH, STALE, NO_DATA, OFFLINE }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun MapScreen(
     mapView: MapView,
     locationMessage: String?,
@@ -71,6 +84,10 @@ fun MapScreen(
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val uiState = viewModel.uiState.collectAsStateWithLifecycle().value
+    val selectedStation = viewModel.selectedStation.collectAsStateWithLifecycle().value
+    val isStationDetailsLoading =
+        viewModel.isStationDetailsLoading.collectAsStateWithLifecycle().value
+    val context = LocalContext.current
 
     LaunchedEffect(locationMessage) {
         locationMessage?.let {
@@ -80,6 +97,11 @@ fun MapScreen(
     }
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { snackbarHostState.showSnackbar(it) }
+    }
+    BackHandler(
+        enabled = drawerState.isOpen && selectedStation == null && !isStationDetailsLoading
+    ) {
+        coroutineScope.launch { drawerState.close() }
     }
 
     ModalNavigationDrawer(
@@ -97,28 +119,31 @@ fun MapScreen(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
-            IconButton(
-                onClick = { coroutineScope.launch { drawerState.open() } },
+            Column(
                 modifier = Modifier
+                    .align(Alignment.TopStart)
                     .statusBarsPadding()
-                    .padding(8.dp)
-                    .size(48.dp)
-                    .background(Color.Black, CircleShape)
+                    .padding(8.dp),
+                horizontalAlignment = Alignment.Start
             ) {
-                Icon(Icons.Default.Menu, "Open menu", tint = Color.White)
-            }
-            DataStatusButton(
-                uiState = uiState,
-                onClick = {
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar(statusExplanation(uiState))
+                IconButton(
+                    onClick = { coroutineScope.launch { drawerState.open() } },
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(Color.Black, CircleShape)
+                ) {
+                    Icon(Icons.Default.Menu, "Open menu", tint = Color.White)
+                }
+                Spacer(Modifier.height(8.dp))
+                DataStatusButton(
+                    uiState = uiState,
+                    onClick = {
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(statusExplanation(uiState))
+                        }
                     }
-                },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(top = 64.dp, end = 8.dp)
-            )
+                )
+            }
             if (searchAreaVisible) {
                 Button(
                     onClick = onSearchThisAreaClick,
@@ -148,6 +173,143 @@ fun MapScreen(
             )
         }
     }
+
+    if (selectedStation != null || isStationDetailsLoading) {
+        ModalBottomSheet(onDismissRequest = viewModel::clearSelectedStation) {
+            StationDetailsContent(
+                station = selectedStation,
+                isLoading = isStationDetailsLoading,
+                uiState = uiState,
+                onOpenInGoogleMaps = { station ->
+                    if (!openInGoogleMaps(context, station)) {
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("No app can open this location.")
+                        }
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun StationDetailsContent(
+    station: StationDetails?,
+    isLoading: Boolean,
+    uiState: MainUiState,
+    onOpenInGoogleMaps: (StationDetails) -> Unit
+) {
+    if (isLoading || station == null) {
+        Box(
+            modifier = Modifier.fillMaxWidth().height(180.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = 640.dp)
+            .verticalScroll(rememberScrollState())
+            .navigationBarsPadding()
+            .padding(horizontal = 24.dp, vertical = 8.dp)
+    ) {
+        Text(station.name, style = MaterialTheme.typography.headlineSmall)
+        if (station.formattedAddress.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text(station.formattedAddress, style = MaterialTheme.typography.bodyLarge)
+        }
+        StationInfo(station)
+
+        Spacer(Modifier.height(24.dp))
+        Text("CNG PRICES", style = MaterialTheme.typography.labelMedium)
+        Spacer(Modifier.height(8.dp))
+        station.prices.forEach { price ->
+            StationPriceRow(price)
+            Spacer(Modifier.height(8.dp))
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Text("SOURCE", style = MaterialTheme.typography.labelMedium)
+        Spacer(Modifier.height(6.dp))
+        Text("Source: MIMIT", style = MaterialTheme.typography.bodyMedium)
+        Text(
+            "MIMIT price data: ${formatDatasetDate(uiState.metadata?.priceDatasetDate, false)}",
+            style = MaterialTheme.typography.bodyMedium
+        )
+        if (!isLocalDataFresh(uiState)) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Local station data is more than 24 hours old.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Button(
+            onClick = { onOpenInGoogleMaps(station) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Open in Google Maps")
+        }
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun StationInfo(station: StationDetails) {
+    val items = listOf(
+        "Brand" to station.brand,
+        "Manager" to station.manager,
+        "Type" to station.stationTypeLabel
+    ).mapNotNull { (label, value) ->
+        value?.trim()?.takeIf(String::isNotEmpty)?.let { label to it }
+    }
+    if (items.isEmpty()) return
+    Spacer(Modifier.height(16.dp))
+    items.forEach { (label, value) -> DataRow("$label:", value) }
+}
+
+@Composable
+private fun StationPriceRow(price: StationPrice) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.medium)
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(price.priceLabel, style = MaterialTheme.typography.titleMedium)
+            Text(price.serviceLabel, style = MaterialTheme.typography.labelLarge)
+        }
+        Text(price.fuelName, style = MaterialTheme.typography.bodySmall)
+        price.communicatedLabel?.let {
+            Text("Communicated $it", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+private fun openInGoogleMaps(context: Context, station: StationDetails): Boolean {
+    val coordinates = "${station.latitude},${station.longitude}"
+    val googleMapsIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("google.navigation:q=$coordinates")
+    ).setPackage("com.google.android.apps.maps")
+    if (runCatching { context.startActivity(googleMapsIntent) }.isSuccess) return true
+
+    val fallbackIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("https://www.google.com/maps/search/?api=1&query=$coordinates")
+    )
+    return runCatching { context.startActivity(fallbackIntent) }.isSuccess
 }
 
 @Composable

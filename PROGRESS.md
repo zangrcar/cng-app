@@ -23,7 +23,7 @@ android-native
 - [x] 1. Full-screen MapLibre map + working settings drawer
 - [x] 2. GPS/current-location support + recenter action
 - [x] 3. Local Room database + MIMIT station-data refresh + data-status UI
-- [ ] 4. Show local stations for map viewport + Search this area + clustering (implemented/build-verified; physical verification pending)
+- [x] 4. Show local stations for map viewport + Search this area + clustering
 - [ ] 5. Station bottom sheet + live details + Google Maps navigation
 - [ ] 6. Search for another place
 - [ ] 7. A -> B route mode + stations along route
@@ -35,7 +35,9 @@ Phase 1 and Phase 2 are complete and manually verified on a physical device.
 
 Phase 3 / Phase 3A is complete and manually verified on a physical device.
 
-Phase 4 is the current task. It is implemented and build-verified, awaiting physical-device verification. Phase 5 has not been started.
+Phase 4 is complete and physically verified.
+
+Phase 5A local station selection/details is implemented and build-verified, awaiting physical-device verification. Phase 5B live MIMIT enrichment has not started.
 
 Implemented:
 - MapLibre Native Android 13.3.1 using the explicit OpenGL `android-sdk-opengl` artifact
@@ -70,7 +72,7 @@ Phase 3A implemented:
 - failed download, parse, validation, or database replacement preserves the previous snapshot
 - separate last-successful refresh time and official MIMIT dataset dates; local freshness uses a rolling 24-hour window independent of source dates
 - dynamically tracked validated-internet connectivity
-- compact fresh/old/offline map status control below the MapLibre compass
+- compact fresh/stale/offline/no-data map status control below the top-left menu button
 - drawer DATA section with refresh time, MIMIT date, station count, connection, and refresh progress/action
 - one non-blocking first-run refresh only when no snapshot exists and validated internet is available
 - no station markers, viewport queries, clustering, or Search this area
@@ -87,6 +89,15 @@ Phase 4 implemented:
 - successful MIMIT refresh reruns the last searched bounds, or searches the current viewport after first-run data arrives
 - station querying works from Room without contacting MIMIT
 - no station details, live API, place search, route UI, Google Maps action, or offline-map implementation
+
+Phase 5A implemented:
+- cluster-first map tap handling preserves cluster expansion; individual station circle or price-label taps select only by GeoJSON `stationId`
+- one Room relation query loads a selected station with all stored CNG prices
+- Compose-safe station details/price models preserve local station metadata, sort prices ascending with self before served ties, format three decimals per kg, and format communication timestamps in Europe/Rome
+- ViewModel-owned selected-station and loading state; dismissing the Material 3 modal bottom sheet clears selection
+- local details sheet shows clean address, available brand/manager/type, every separate self/served CNG price, communication time when stored, MIMIT source dataset date, and a stale-data note only under the existing 24-hour rule
+- Open in Google Maps targets exact station coordinates through the Google Maps app and falls back to an ordinary Google Maps web URI without requiring an API key
+- no live MIMIT station API, opening hours, open/closed state, place search, route mode, or other Phase 5B behavior
 
 ## Verification
 
@@ -139,8 +150,8 @@ Phase 4 (2026-08-30):
 - `./gradlew.bat test`: PASS
 - `./gradlew.bat assembleDebug`: PASS
 - physical-device viewport query and station/cluster/price rendering: PASS
-- physical-device cluster expansion and refresh-requery verification: pending
-- Phase 5 not started
+- physical-device cluster expansion and refresh-requery verification: PASS
+- Phase 4 complete
 
 MapLibre renderer dependency correction (2026-08-30):
 - Phase 1 accidentally used `org.maplibre.gl:android-sdk:13.3.1`, the default Vulkan renderer in MapLibre Android 13.x, despite progress documentation claiming OpenGL
@@ -158,7 +169,7 @@ Phase 4 station rendering resolution (2026-08-31):
 - explicit OpenGL remains in use; renderer selection, source-update timing, source recreation, stale references, and filter alternatives were investigations rather than the confirmed rendering cause
 - `./gradlew.bat test`: PASS (20 tests)
 - `./gradlew.bat assembleDebug`: PASS
-- full Phase 4 completion remains pending physical-device cluster-expansion and refresh-requery verification
+- Phase 4 physical-device verification: PASS
 
 Data-status freshness correction (2026-08-31):
 - main status freshness now depends only on a usable snapshot and `lastSuccessfulRefreshEpochMillis`: under 24 hours is fresh, while 24 hours or more is stale
@@ -168,6 +179,24 @@ Data-status freshness correction (2026-08-31):
 - added 6 unit tests covering 5-minute and 23h59m freshness, the 24-hour boundary, midnight crossing, old MIMIT source dates, and unchanged last-success timestamp after failure
 - `./gradlew.bat test`: PASS (26 tests)
 - `./gradlew.bat assembleDebug`: PASS
+
+Phase 5A local station details (2026-08-31):
+- added individual station selection, local Room details lookup, and a dismissible Material 3 bottom sheet over the unchanged map camera
+- details show all locally stored CNG prices separately, local station/address metadata, Europe/Rome communication timestamps, dataset-level MIMIT source date, and Google Maps navigation with browser fallback
+- added 5 focused station-details mapping/formatting tests; total unit tests: 31 PASS
+- `./gradlew.bat test`: PASS
+- `./gradlew.bat assembleDebug`: PASS
+- physical-device verification: pending
+- Phase 5B live MIMIT enrichment: not started
+
+Map UX corrections (2026-08-31):
+- station details translate only the official MIMIT types for display: `Stradale` to `Roadside` and `Autostradale` to `Motorway`; matching ignores case/whitespace, unknown values use their trimmed source text, and Room/parser values remain unchanged
+- Android Back closes an open drawer without leaving the app; the handler is disabled while the station sheet is present so normal sheet dismissal keeps priority, while closed-drawer Back remains normal Android behavior
+- moved the single data-status control from top-right to the same top-left alignment directly below the hamburger; MapLibre compass remains alone at top-right
+- added 4 focused station-type display tests; total unit tests: 35 PASS
+- `./gradlew.bat test`: PASS
+- `./gradlew.bat assembleDebug`: PASS
+- no new phase was started or completed
 
 ## Important discoveries
 

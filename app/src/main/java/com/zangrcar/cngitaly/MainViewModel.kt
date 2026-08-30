@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.zangrcar.cngitaly.data.StationRepository
 import com.zangrcar.cngitaly.data.MapBounds
 import com.zangrcar.cngitaly.data.MapStation
+import com.zangrcar.cngitaly.data.StationDetails
 import com.zangrcar.cngitaly.data.local.CngDatabase
 import com.zangrcar.cngitaly.data.local.DatasetMetaEntity
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.Job
 
 data class MainUiState(
     val metadata: DatasetMetaEntity? = null,
@@ -42,6 +44,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val stationSearchRunning = MutableStateFlow(false)
     private val _stations = MutableStateFlow<List<MapStation>>(emptyList())
     val stations = _stations.asStateFlow()
+    private val _selectedStation = MutableStateFlow<StationDetails?>(null)
+    val selectedStation = _selectedStation.asStateFlow()
+    private val _isStationDetailsLoading = MutableStateFlow(false)
+    val isStationDetailsLoading = _isStationDetailsLoading.asStateFlow()
+    private var stationDetailsJob: Job? = null
     private var lastSearchedBounds: MapBounds? = null
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -120,6 +127,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 stationSearchRunning.value = false
             }
         }
+    }
+
+    fun selectStation(stationId: Int) {
+        stationDetailsJob?.cancel()
+        stationDetailsJob = viewModelScope.launch {
+            _selectedStation.value = null
+            _isStationDetailsLoading.value = true
+            try {
+                val details = repository.getStationDetails(stationId)
+                if (details == null) {
+                    _messages.emit("Station details are unavailable.")
+                } else {
+                    _selectedStation.value = details
+                }
+            } catch (_: Exception) {
+                _messages.emit("Unable to load station details.")
+            } finally {
+                _isStationDetailsLoading.value = false
+            }
+        }
+    }
+
+    fun clearSelectedStation() {
+        stationDetailsJob?.cancel()
+        stationDetailsJob = null
+        _isStationDetailsLoading.value = false
+        _selectedStation.value = null
     }
 
     override fun onCleared() {

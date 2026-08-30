@@ -18,6 +18,10 @@ interface StationDao {
     suspend fun getStationCount(): Int
 
     @Transaction
+    @Query("SELECT * FROM stations WHERE id = :stationId LIMIT 1")
+    suspend fun getStationWithPrices(stationId: Int): StationWithPrices?
+
+    @Transaction
     @Query(
         """
         SELECT * FROM stations

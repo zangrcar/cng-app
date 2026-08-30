@@ -25,9 +25,9 @@ Avoid traditional multi-screen navigation unless genuinely necessary.
 
 Eventually the main map contains:
 
-- hamburger/menu button in top-left;
+- hamburger/menu button in top-left with the compact data/status indicator underneath;
 - place search UI;
-- one compact data/network status icon in top-right;
+- MapLibre compass in top-right;
 - current-location/recenter button;
 - Search this area button when map has moved from the last searched bounds;
 - CNG station markers/clusters;

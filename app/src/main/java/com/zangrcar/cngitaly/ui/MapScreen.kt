@@ -49,12 +49,13 @@ import com.zangrcar.cngitaly.MainViewModel
 import kotlinx.coroutines.launch
 import org.maplibre.android.maps.MapView
 import java.time.Instant
+import java.time.Duration
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private enum class DataStatus { FRESH, OLD, OFFLINE }
+internal enum class DataStatus { FRESH, STALE, NO_DATA, OFFLINE }
 
 @Composable
 fun MapScreen(
@@ -214,12 +215,12 @@ private fun DataStatusButton(
     val status = dataStatus(uiState)
     val icon = when (status) {
         DataStatus.FRESH -> Icons.Default.CheckCircle
-        DataStatus.OLD -> Icons.Default.Warning
+        DataStatus.STALE, DataStatus.NO_DATA -> Icons.Default.Warning
         DataStatus.OFFLINE -> Icons.Default.CloudOff
     }
     val container = when (status) {
         DataStatus.FRESH -> Color(0xFF1B5E20)
-        DataStatus.OLD -> Color(0xFFF9A825)
+        DataStatus.STALE, DataStatus.NO_DATA -> Color(0xFFF9A825)
         DataStatus.OFFLINE -> Color(0xFF424242)
     }
     FilledIconButton(
@@ -234,38 +235,43 @@ private fun DataStatusButton(
     }
 }
 
-private fun dataStatus(state: MainUiState): DataStatus = when {
+internal fun dataStatus(state: MainUiState, now: Instant = Instant.now()): DataStatus = when {
     !state.isOnline -> DataStatus.OFFLINE
-    isLocalDataFresh(state) -> DataStatus.FRESH
-    else -> DataStatus.OLD
+    !hasUsableLocalSnapshot(state) -> DataStatus.NO_DATA
+    isLocalDataFresh(state, now) -> DataStatus.FRESH
+    else -> DataStatus.STALE
 }
 
-private fun isLocalDataFresh(state: MainUiState): Boolean {
+internal fun isLocalDataFresh(state: MainUiState, now: Instant = Instant.now()): Boolean {
     val meta = state.metadata ?: return false
-    val zone = ZoneId.of("Europe/Rome")
-    val today = LocalDate.now(zone)
-    val refreshedDate = Instant.ofEpochMilli(meta.lastSuccessfulRefreshEpochMillis)
-        .atZone(zone).toLocalDate()
-    val datasetDate = runCatching { LocalDate.parse(meta.priceDatasetDate) }.getOrNull()
-        ?: return false
-    return refreshedDate == today && (datasetDate == today || datasetDate == today.minusDays(1))
+    if (meta.stationCount <= 0) return false
+    val age = Duration.between(
+        Instant.ofEpochMilli(meta.lastSuccessfulRefreshEpochMillis),
+        now
+    )
+    return !age.isNegative && age < Duration.ofHours(24)
 }
 
 private fun statusExplanation(state: MainUiState): String {
     val meta = state.metadata
-    if (!state.isOnline) {
-        if (meta == null) return "Offline. No local station data."
-        val age = if (isLocalDataFresh(state)) "" else "old "
-        return "Offline. Using ${age}MIMIT data from ${formatDatasetDate(meta.priceDatasetDate, true)}."
-    }
-    if (isLocalDataFresh(state)) {
-        return "Station data refreshed today. MIMIT data: ${formatDatasetDate(meta?.priceDatasetDate, true)}."
-    }
-    return if (meta == null) {
-        "No local station data. Open the menu to refresh."
-    } else {
-        "Station data is old. Open the menu to refresh."
-    }
+    val prefix = if (state.isOnline) "" else "Offline. "
+    if (!hasUsableLocalSnapshot(state) || meta == null) return "${prefix}No local station data."
+    return "${prefix}Station data refreshed ${formatRelativeAge(meta.lastSuccessfulRefreshEpochMillis)} ago. " +
+        "MIMIT price snapshot: ${formatDatasetDate(meta.priceDatasetDate, true)}."
+}
+
+private fun hasUsableLocalSnapshot(state: MainUiState): Boolean =
+    state.metadata?.stationCount?.let { it > 0 } == true
+
+internal fun formatRelativeAge(epochMillis: Long, now: Instant = Instant.now()): String {
+    val duration = Duration.between(Instant.ofEpochMilli(epochMillis), now)
+    if (duration.isNegative || duration.toMinutes() < 1) return "less than a minute"
+    val minutes = duration.toMinutes()
+    if (minutes < 60) return "$minutes minute${if (minutes == 1L) "" else "s"}"
+    val hours = duration.toHours()
+    if (hours < 24) return "$hours hour${if (hours == 1L) "" else "s"}"
+    val days = duration.toDays()
+    return "$days day${if (days == 1L) "" else "s"}"
 }
 
 private fun formatRefresh(epochMillis: Long?): String {

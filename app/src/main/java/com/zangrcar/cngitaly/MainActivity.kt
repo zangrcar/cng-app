@@ -96,14 +96,13 @@ class MainActivity : ComponentActivity() {
                     userGestureMovement = false
                     searchAreaVisible = true
                 }
-                stationMapLayer?.logRenderDiagnostics(mapView.width, mapView.height)
             }
             map.setStyle("https://tiles.openfreemap.org/styles/liberty") { style ->
                 loadedStyle = style
                 stationMapLayer?.destroy()
-                stationMapLayer = StationMapLayer(map).also {
+                stationMapLayer = StationMapLayer(map, style).also {
                     val stations = mainViewModel.stations.value
-                    if (!it.render(stations) && stations.isNotEmpty()) searchAreaVisible = true
+                    if (!it.update(stations) && stations.isNotEmpty()) searchAreaVisible = true
                 }
                 if (hasForegroundLocationPermission()) {
                     val willCenterOnLocation = !hasCenteredOnLocation
@@ -135,13 +134,9 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             mainViewModel.stations.collect { stations ->
                 val layer = stationMapLayer
-                if (layer != null && !layer.render(stations) && stations.isNotEmpty()) {
+                if (layer != null && !layer.update(stations) && stations.isNotEmpty()) {
                     searchAreaVisible = true
                 }
-                mapView.postDelayed(
-                    { layer?.logRenderDiagnostics(mapView.width, mapView.height) },
-                    750L
-                )
             }
         }
         lifecycleScope.launch {

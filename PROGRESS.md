@@ -68,7 +68,7 @@ Phase 3A implemented:
 - complete in-memory station/price merge retaining only coordinate-valid stations with usable CNG prices
 - one Room transaction replaces prices, stations, and metadata only after a usable snapshot is ready
 - failed download, parse, validation, or database replacement preserves the previous snapshot
-- separate refresh time and official MIMIT dataset dates with Europe/Rome freshness rules
+- separate last-successful refresh time and official MIMIT dataset dates; local freshness uses a rolling 24-hour window independent of source dates
 - dynamically tracked validated-internet connectivity
 - compact fresh/old/offline map status control below the MapLibre compass
 - drawer DATA section with refresh time, MIMIT date, station count, connection, and refresh progress/action
@@ -81,7 +81,7 @@ Phase 4 implemented:
 - initial Italy/GPS viewport and GPS recenter perform one local station search
 - user camera gestures only mark the viewport dirty after camera idle; no database work occurs during movement
 - compact top-center Search this area action queries the current visible bounds on demand
-- a clustered GeoJSON source with cluster radius 50 and max cluster zoom 14, recreated with complete data for each station result
+- one clustered GeoJSON source installed with the loaded style, with cluster radius 50 and max cluster zoom 14
 - cluster circle/count and individual circle/price style layers; no deprecated marker annotations
 - cluster taps use MapLibre expansion zoom and do not trigger a new Room query or dirty state
 - successful MIMIT refresh reruns the last searched bounds, or searches the current viewport after first-run data arrives
@@ -138,52 +138,36 @@ Phase 4 (2026-08-30):
 - total unit tests: 20 PASS
 - `./gradlew.bat test`: PASS
 - `./gradlew.bat assembleDebug`: PASS
-- physical-device viewport search, clustering, prices, cluster expansion, and refresh requery verification: pending
+- physical-device viewport query and station/cluster/price rendering: PASS
+- physical-device cluster expansion and refresh-requery verification: pending
 - Phase 5 not started
-
-Phase 4 rendering/search correction (2026-08-30):
-- physical-device symptom: viewport searches completed and hid Search this area, but rendered no stations or clusters
-- root cause in the rendering handoff: station updates retained and mutated the `GeoJsonSource` instance created with an earlier style instead of resolving the source from the currently loaded MapLibre style
-- station updates now get `map.style` and `getSourceAs<GeoJsonSource>("cng-stations")` for every update; existing results are still pushed immediately after source/layer installation, covering both style-first and Room-first ordering
-- a non-empty result whose current style/source cannot be resolved is not treated as a completed visible map update; Search this area remains available
-- `CngMap` diagnostic logs now trace bounds, metadata versus actual station-table count, DAO results, mapped results, GeoJSON feature count, current source/style state, and source/layer installation
-- DAO viewport SQL, MapLibre bounds field mapping, antimeridian handling, `Point.fromLngLat(longitude, latitude)`, cluster filters, individual filters, and top-of-style layer insertion were inspected and retained as correct
-- `./gradlew.bat test`: PASS
-- `./gradlew.bat assembleDebug`: PASS
-- physical-device verification remains pending
-
-Phase 4 MapLibre layer correction (2026-08-30):
-- follow-up device evidence proved the complete data path through current-source update: 1,115 Room rows mapped to 1,115 GeoJSON features with `sourceExists=true` and `styleLoaded=true`, while no markers rendered
-- the remaining code-level rendering fault was the layer filter setup: it inferred individual points with `not(has("point_count"))` instead of using MapLibre's generated `cluster` boolean property
-- cluster layers now use `cluster == true`; individual layers use `cluster != true`
-- cluster count and station price use direct `Expression.get(...)` text fields; both symbol layers allow overlap and ignore placement
-- final top-of-style order is station circle, station price, cluster circle, cluster count; circle opacity is explicitly 1
-- the source remains a single clustered `GeoJsonSource` configured with radius 50 and max cluster zoom 14, and every layer uses that same source ID
-- delayed `CngMap` diagnostics now log `querySourceFeatures(null)` count, rendered-feature count over the visible map rectangle, and existence/visibility/filter for all four intended layers after source updates and on camera idle
-- no diagnostic all-points layer remains in the finished implementation
-- `./gradlew.bat test`: PASS (20 tests)
-- `./gradlew.bat assembleDebug`: PASS
-- corrected filters and new source/render diagnostics await physical-device verification; Phase 4 remains pending
 
 MapLibre renderer dependency correction (2026-08-30):
 - Phase 1 accidentally used `org.maplibre.gl:android-sdk:13.3.1`, the default Vulkan renderer in MapLibre Android 13.x, despite progress documentation claiming OpenGL
 - switched the single MapLibre dependency to the explicit OpenGL artifact `org.maplibre.gl:android-sdk-opengl:13.3.1`; the version remains 13.3.1
-- station rendering implementation was intentionally left unchanged
 - `./gradlew.bat clean`: PASS
 - `./gradlew.bat test`: PASS (20 tests)
 - `./gradlew.bat assembleDebug`: PASS
-- Phase 4 remains pending physical-device verification
 
-Phase 4 populated-source recreation (2026-08-30):
-- physical-device diagnostics showed `querySourceFeatures=0` and `queryRenderedFeatures=0` after dynamic `setGeoJson`, despite hundreds or thousands of valid features reaching the current source
-- stopped using the dynamic GeoJSON update path: each render removes current station layer objects and source, serializes the complete FeatureCollection, creates a new clustered `GeoJsonSource` containing that raw JSON, and recreates the four layers
-- removed `withSynchronousUpdate(true)` and all station-rendering calls to `setGeoJson`
-- restored common MapLibre clustering filters: cluster layers have `point_count`; individual layers do not have `point_count`
-- cluster clicks continue to retrieve the current source from the current style
-- retained concise source recreation, layer recreation, source-query, and rendered-query diagnostics
+Phase 4 station rendering resolution (2026-08-31):
+- physical-device viewport searches returned hundreds or thousands of valid stations but initially rendered no station or cluster layers
+- confirmed root cause: dynamically added SymbolLayers inherited MapLibre's default `Open Sans Regular` / `Arial Unicode MS Regular` font stack, which OpenFreeMap Liberty's glyph endpoint does not provide; the failed glyph request prevented the source tile from completing layout
+- station price and cluster count SymbolLayers now explicitly use only `Noto Sans Regular`, matching the Liberty style; physical-device station circles, clusters, and price/count labels render successfully
+- restored the intended lifecycle after diagnosis: one source and four layers are installed per loaded style, and station results update the current style's source with `setGeoJson`; existing results are pushed immediately after style installation so either async ordering works
+- temporary source queries, rendered-feature queries, layer dumps, source recreation, and delayed diagnostic posts were removed
+- explicit OpenGL remains in use; renderer selection, source-update timing, source recreation, stale references, and filter alternatives were investigations rather than the confirmed rendering cause
 - `./gradlew.bat test`: PASS (20 tests)
 - `./gradlew.bat assembleDebug`: PASS
-- Phase 4 remains pending physical-device verification
+- full Phase 4 completion remains pending physical-device cluster-expansion and refresh-requery verification
+
+Data-status freshness correction (2026-08-31):
+- main status freshness now depends only on a usable snapshot and `lastSuccessfulRefreshEpochMillis`: under 24 hours is fresh, while 24 hours or more is stale
+- MIMIT station/price dataset dates remain visible source metadata but do not control the status icon
+- status explanations concisely include relative refresh age and the MIMIT price snapshot date when local data exists
+- failed refresh behavior remains unchanged: only a successful snapshot replacement writes `lastSuccessfulRefreshEpochMillis`
+- added 6 unit tests covering 5-minute and 23h59m freshness, the 24-hour boundary, midnight crossing, old MIMIT source dates, and unchanged last-success timestamp after failure
+- `./gradlew.bat test`: PASS (26 tests)
+- `./gradlew.bat assembleDebug`: PASS
 
 ## Important discoveries
 

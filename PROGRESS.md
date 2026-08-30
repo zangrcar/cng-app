@@ -31,7 +31,9 @@ android-native
 
 ## Current task
 
-Phase 2 complete and manually verified on a physical device. Phase 3 has not been started.
+Phase 1 and Phase 2 are complete and manually verified on a physical device.
+
+Phase 3A is implemented and build-verified, awaiting physical/manual verification. Phase 3 is not complete and Phase 4 has not been started.
 
 Implemented:
 - MapLibre Native Android 13.3.1 using the stable OpenGL `android-sdk` artifact
@@ -51,11 +53,25 @@ Phase 2 implemented:
 - no automatic permission dialog on startup
 - MapLibre built-in LocationComponent and default location engine
 - normal MapLibre current-location puck after style load and permission grant
-- one-time startup centering at zoom 10 when permission already exists
+- one-time startup centering at the accepted zoom 10.5 when permission already exists
 - bottom-right current-location button with navigation-bar inset handling
-- button requests permission when needed and performs the original one-time zoom 10 recenter when location is available
+- button requests permission when needed and performs a one-time zoom 10.5 recenter when location is available
 - denial and waiting feedback through a Material Snackbar
 - camera remains in `CameraMode.NONE`, so the map never continuously follows location
+
+Phase 3A implemented:
+- Room 2.8.4 database with indexed stations, CNG prices, dataset metadata, and station-price foreign key
+- direct OkHttp downloads of both MIMIT CSV exports with bounded timeouts
+- pipe/BOM/metadata-aware parsing, Rome-zone communication timestamps, validation, and CNG-only filtering
+- complete in-memory station/price merge retaining only coordinate-valid stations with usable CNG prices
+- one Room transaction replaces prices, stations, and metadata only after a usable snapshot is ready
+- failed download, parse, validation, or database replacement preserves the previous snapshot
+- separate refresh time and official MIMIT dataset dates with Europe/Rome freshness rules
+- dynamically tracked validated-internet connectivity
+- compact fresh/old/offline map status control below the MapLibre compass
+- drawer DATA section with refresh time, MIMIT date, station count, connection, and refresh progress/action
+- one non-blocking first-run refresh only when no snapshot exists and validated internet is available
+- no station markers, viewport queries, clustering, or Search this area
 
 ## Verification
 
@@ -87,14 +103,23 @@ Phase 2 (2026-08-30):
 - physical-device verification was completed before the later UI corrections below
 
 Phase 2 UI corrections (2026-08-30):
-- restored the original current-location button recenter zoom of 10; automatic startup zoom remains 10
+- accepted current-location button and automatic startup zoom is 10.5
 - made the menu control a 48 dp black circle with a white icon, aligned using the same status-bar inset and 8 dp edge margin as the compass
 - `./gradlew.bat test`: PASS
 - `./gradlew.bat assembleDebug`: PASS
 
+Phase 3A (2026-08-30):
+- parser unit tests: 13 PASS
+- total unit tests: 14 PASS
+- `./gradlew.bat test`: PASS
+- `./gradlew.bat assembleDebug`: PASS
+- physical/manual database refresh, first-run, freshness, connectivity, and failure-preservation verification: pending
+- Phase 3 remains incomplete pending this verification; Phase 4 not started
+
 ## Important discoveries
 
 - MapLibre's stable OpenGL Android artifact is `org.maplibre.gl:android-sdk:13.3.1`.
+- AGP 9 built-in Kotlin requires `android.disallowKotlinSourceSets=false` for the required KSP-generated Room sources.
 
 ## Deviations from DESIGN.md
 

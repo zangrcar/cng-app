@@ -59,10 +59,13 @@ Internal state distinguishes:
 - station-data freshness.
 
 Examples:
-- online + today's data -> normal/fresh indicator;
-- online + old data -> warning indicator;
+- usable local snapshot + last successful refresh less than 24 hours ago -> normal/fresh indicator;
+- usable local snapshot + last successful refresh 24 hours ago or more -> warning/stale indicator;
+- no usable local snapshot -> no-data warning indicator;
 - offline -> offline indicator;
 - offline + old data -> offline indication with stale-data warning.
+
+The MIMIT source dataset date is informational and does not determine local-data freshness.
 
 Tapping the indicator should explain the current state.
 

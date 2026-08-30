@@ -1,6 +1,5 @@
 package com.zangrcar.cngitaly.data
 
-import android.util.Log
 import com.zangrcar.cngitaly.data.local.CngPriceEntity
 import com.zangrcar.cngitaly.data.local.DatasetMetaEntity
 import com.zangrcar.cngitaly.data.local.StationDao
@@ -16,9 +15,6 @@ class StationRepository(
 
     suspend fun hasLocalData(): Boolean = dao.getMeta() != null
 
-    suspend fun getStoredStationCounts(): Pair<Int?, Int> =
-        dao.getMeta()?.stationCount to dao.getStationCount()
-
     suspend fun getStationDetails(stationId: Int): StationDetails? =
         dao.getStationWithPrices(stationId)?.toStationDetails()
 
@@ -29,7 +25,6 @@ class StationRepository(
             east = bounds.east,
             west = bounds.west
         )
-        Log.d("CngMap", "Room result: stations=${roomStations.size}")
         return roomStations.mapNotNull { it.toMapStation() }
     }
 

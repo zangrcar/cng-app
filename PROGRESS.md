@@ -37,7 +37,9 @@ Phase 3 / Phase 3A is complete and manually verified on a physical device.
 
 Phase 4 is complete and physically verified.
 
-Phase 5A local station selection/details is implemented and build-verified, awaiting physical-device verification. Phase 5B live MIMIT enrichment has not started.
+Phase 5A local station selection/details is physically verified.
+
+Phase 5B best-effort live MIMIT enrichment is implemented and build-verified, awaiting physical-device verification.
 
 Implemented:
 - MapLibre Native Android 13.3.1 using the explicit OpenGL `android-sdk-opengl` artifact
@@ -97,7 +99,15 @@ Phase 5A implemented:
 - ViewModel-owned selected-station and loading state; dismissing the Material 3 modal bottom sheet clears selection
 - local details sheet shows clean address, available brand/manager/type, every separate self/served CNG price, communication time when stored, MIMIT source dataset date, and a stale-data note only under the existing 24-hour rule
 - Open in Google Maps targets exact station coordinates through the Google Maps app and falls back to an ordinary Google Maps web URI without requiring an API key
-- no live MIMIT station API, opening hours, open/closed state, place search, route mode, or other Phase 5B behavior
+- no place search, route mode, or offline-map behavior
+
+Phase 5B implemented:
+- small OkHttp client calls `ospzApi/registry/servicearea/{stationId}` only when validated internet is available, with short timeouts and defensive optional-field JSON parsing
+- Room-backed Phase 5A details remain authoritative and appear first; live state is cancellable per selection and routine HTTP, timeout, offline, or parsing failures quietly preserve the local sheet
+- live fuels reuse the CSV CNG classifier, reject invalid prices and LNG/GNL/GPL, preserve self/served rows, and replace displayed local price rows only when usable live CNG prices exist
+- optional live contact details and services enrich the existing sheet without adding secondary actions
+- optional weekly opening hours distinguish 24-hour, explicitly closed, communicated ranges, and unknown/malformed/not-communicated data; current OPEN/CLOSED/UNKNOWN status uses Europe/Rome
+- no persistent live cache or Room migration; no live response can overwrite the reliable local snapshot
 
 ## Verification
 
@@ -186,8 +196,7 @@ Phase 5A local station details (2026-08-31):
 - added 5 focused station-details mapping/formatting tests; total unit tests: 31 PASS
 - `./gradlew.bat test`: PASS
 - `./gradlew.bat assembleDebug`: PASS
-- physical-device verification: pending
-- Phase 5B live MIMIT enrichment: not started
+- physical-device verification: PASS
 
 Map UX corrections (2026-08-31):
 - station details translate only the official MIMIT types for display: `Stradale` to `Roadside` and `Autostradale` to `Motorway`; matching ignores case/whitespace, unknown values use their trimmed source text, and Room/parser values remain unchanged
@@ -197,6 +206,27 @@ Map UX corrections (2026-08-31):
 - `./gradlew.bat test`: PASS
 - `./gradlew.bat assembleDebug`: PASS
 - no new phase was started or completed
+
+Phase 5B live MIMIT enrichment (2026-08-31):
+- implemented best-effort live station enrichment from the undocumented MIMIT `ospzApi` endpoint while retaining Room as the authoritative offline/failure fallback
+- live data can replace price rows only with valid CNG prices and can add confident Rome-time opening status, weekly hours, phone, website, email, and services
+- missing, malformed, timed-out, non-2xx, offline, or incomplete live responses leave the local sheet usable and do not produce routine error Snackbars
+- selecting another station or dismissing the sheet cancels and clears the prior live state
+- removed temporary viewport bounds, Room count, and mapped-count `CngMap` diagnostics; retained only a useful missing-current-source failure log
+- added 14 deterministic unit tests for live CNG filtering, self/served preservation, opening-state interpretation, and partial/optional JSON parsing
+- total unit tests: 49 PASS
+- `./gradlew.bat test`: PASS
+- `./gradlew.bat assembleDebug`: PASS
+- Phase 5B physical-device verification: pending
+- full Phase 5 remains incomplete
+
+Phase 5B opening-hours presentation cleanup (2026-08-31):
+- UNKNOWN current opening status is now omitted rather than displaying an unavailable/unknown message; confident OPEN/CLOSED status and transition details remain unchanged
+- the weekly OPENING HOURS section is hidden when every entry is missing, not communicated, or malformed; when any weekday is meaningful, the full seven-day context remains visible with Unknown for unavailable days
+- parsing, Europe/Rome calculations, and OPEN/CLOSED/UNKNOWN interpretation were unchanged
+- added 7 focused presentation tests; total unit tests: 56 PASS
+- `./gradlew.bat test`: PASS
+- `./gradlew.bat assembleDebug`: PASS
 
 ## Important discoveries
 

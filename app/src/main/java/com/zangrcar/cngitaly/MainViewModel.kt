@@ -5,7 +5,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.zangrcar.cngitaly.data.StationRepository
@@ -14,6 +13,8 @@ import com.zangrcar.cngitaly.data.MapStation
 import com.zangrcar.cngitaly.data.StationDetails
 import com.zangrcar.cngitaly.data.local.CngDatabase
 import com.zangrcar.cngitaly.data.local.DatasetMetaEntity
+import com.zangrcar.cngitaly.data.mimit.LiveStationDetails
+import com.zangrcar.cngitaly.data.mimit.MimitLiveClient
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,6 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 
 data class MainUiState(
     val metadata: DatasetMetaEntity? = null,
@@ -37,6 +39,7 @@ data class MainUiState(
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val database = CngDatabase.getInstance(application)
     private val repository = StationRepository(database.stationDao())
+    private val liveClient = MimitLiveClient()
     private val connectivityManager =
         application.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     private val online = MutableStateFlow(hasValidatedInternet())
@@ -48,6 +51,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val selectedStation = _selectedStation.asStateFlow()
     private val _isStationDetailsLoading = MutableStateFlow(false)
     val isStationDetailsLoading = _isStationDetailsLoading.asStateFlow()
+    private val _liveStationDetails = MutableStateFlow<LiveStationDetails?>(null)
+    val liveStationDetails = _liveStationDetails.asStateFlow()
+    private val _isLiveDetailsLoading = MutableStateFlow(false)
+    val isLiveDetailsLoading = _isLiveDetailsLoading.asStateFlow()
     private var stationDetailsJob: Job? = null
     private var lastSearchedBounds: MapBounds? = null
 
@@ -108,17 +115,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         stationSearchRunning.value = true
         viewModelScope.launch {
             try {
-                logBounds(bounds)
                 if (!repository.hasLocalData()) {
                     if (userInitiated) {
                         _messages.emit("No local station data. Refresh it from the menu.")
                     }
                     return@launch
                 }
-                val (metadataCount, storedCount) = repository.getStoredStationCounts()
                 val stations = repository.getStationsInBounds(bounds)
-                Log.d(LOG_TAG, "Room data: metadataStations=$metadataCount, storedStations=$storedCount")
-                Log.d(LOG_TAG, "Mapped result: stations=${stations.size}")
                 _stations.value = stations
                 lastSearchedBounds = bounds
             } catch (_: Exception) {
@@ -131,15 +134,35 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectStation(stationId: Int) {
         stationDetailsJob?.cancel()
+        _selectedStation.value = null
+        _liveStationDetails.value = null
+        _isLiveDetailsLoading.value = false
         stationDetailsJob = viewModelScope.launch {
-            _selectedStation.value = null
             _isStationDetailsLoading.value = true
             try {
                 val details = repository.getStationDetails(stationId)
                 if (details == null) {
                     _messages.emit("Station details are unavailable.")
-                } else {
-                    _selectedStation.value = details
+                    return@launch
+                }
+                _selectedStation.value = details
+                _isStationDetailsLoading.value = false
+
+                if (online.value) {
+                    _isLiveDetailsLoading.value = true
+                    try {
+                        val liveDetails = liveClient.getStationDetails(stationId)
+                        if (_selectedStation.value?.id == stationId) {
+                            _liveStationDetails.value = liveDetails
+                        }
+                    } catch (exception: Exception) {
+                        if (exception is CancellationException) throw exception
+                        // Live MIMIT enrichment is best-effort; local details remain authoritative.
+                    } finally {
+                        if (_selectedStation.value?.id == stationId) {
+                            _isLiveDetailsLoading.value = false
+                        }
+                    }
                 }
             } catch (_: Exception) {
                 _messages.emit("Unable to load station details.")
@@ -153,7 +176,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         stationDetailsJob?.cancel()
         stationDetailsJob = null
         _isStationDetailsLoading.value = false
+        _isLiveDetailsLoading.value = false
         _selectedStation.value = null
+        _liveStationDetails.value = null
     }
 
     override fun onCleared() {
@@ -168,11 +193,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun searchStationsInternal(bounds: MapBounds) {
         stationSearchRunning.value = true
         try {
-            logBounds(bounds)
-            val (metadataCount, storedCount) = repository.getStoredStationCounts()
             val stations = repository.getStationsInBounds(bounds)
-            Log.d(LOG_TAG, "Room data: metadataStations=$metadataCount, storedStations=$storedCount")
-            Log.d(LOG_TAG, "Mapped result: stations=${stations.size}")
             _stations.value = stations
             lastSearchedBounds = bounds
         } catch (_: Exception) {
@@ -187,18 +208,5 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
         return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-    }
-
-
-    private fun logBounds(bounds: MapBounds) {
-        Log.d(
-            LOG_TAG,
-            "bounds: north=${bounds.north}, south=${bounds.south}, " +
-                "east=${bounds.east}, west=${bounds.west}"
-        )
-    }
-
-    companion object {
-        private const val LOG_TAG = "CngMap"
     }
 }

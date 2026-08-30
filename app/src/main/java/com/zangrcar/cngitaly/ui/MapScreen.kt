@@ -58,8 +58,16 @@ import com.zangrcar.cngitaly.MainUiState
 import com.zangrcar.cngitaly.MainViewModel
 import com.zangrcar.cngitaly.data.StationDetails
 import com.zangrcar.cngitaly.data.StationPrice
+import com.zangrcar.cngitaly.data.mimit.LiveCngPrice
+import com.zangrcar.cngitaly.data.mimit.LiveOpenState
+import com.zangrcar.cngitaly.data.mimit.LiveOpenStatus
+import com.zangrcar.cngitaly.data.mimit.LiveStationDetails
+import com.zangrcar.cngitaly.data.mimit.OpeningHoursEntry
+import com.zangrcar.cngitaly.data.mimit.liveOpenStatus
+import com.zangrcar.cngitaly.data.mimit.openingHoursLabel
 import kotlinx.coroutines.launch
 import org.maplibre.android.maps.MapView
+import java.time.DayOfWeek
 import java.time.Instant
 import java.time.Duration
 import java.time.LocalDate
@@ -87,6 +95,9 @@ fun MapScreen(
     val selectedStation = viewModel.selectedStation.collectAsStateWithLifecycle().value
     val isStationDetailsLoading =
         viewModel.isStationDetailsLoading.collectAsStateWithLifecycle().value
+    val liveStationDetails = viewModel.liveStationDetails.collectAsStateWithLifecycle().value
+    val isLiveDetailsLoading =
+        viewModel.isLiveDetailsLoading.collectAsStateWithLifecycle().value
     val context = LocalContext.current
 
     LaunchedEffect(locationMessage) {
@@ -179,6 +190,8 @@ fun MapScreen(
             StationDetailsContent(
                 station = selectedStation,
                 isLoading = isStationDetailsLoading,
+                liveDetails = liveStationDetails,
+                isLiveLoading = isLiveDetailsLoading,
                 uiState = uiState,
                 onOpenInGoogleMaps = { station ->
                     if (!openInGoogleMaps(context, station)) {
@@ -196,6 +209,8 @@ fun MapScreen(
 private fun StationDetailsContent(
     station: StationDetails?,
     isLoading: Boolean,
+    liveDetails: LiveStationDetails?,
+    isLiveLoading: Boolean,
     uiState: MainUiState,
     onOpenInGoogleMaps: (StationDetails) -> Unit
 ) {
@@ -223,14 +238,28 @@ private fun StationDetailsContent(
             Text(station.formattedAddress, style = MaterialTheme.typography.bodyLarge)
         }
         StationInfo(station)
+        LiveStatus(liveDetails, isLiveLoading)
 
         Spacer(Modifier.height(24.dp))
         Text("CNG PRICES", style = MaterialTheme.typography.labelMedium)
-        Spacer(Modifier.height(8.dp))
-        station.prices.forEach { price ->
-            StationPriceRow(price)
-            Spacer(Modifier.height(8.dp))
+        if (liveDetails?.cngPrices?.isNotEmpty() == true) {
+            Text("Live MIMIT", style = MaterialTheme.typography.bodySmall)
         }
+        Spacer(Modifier.height(8.dp))
+        if (liveDetails?.cngPrices?.isNotEmpty() == true) {
+            liveDetails.cngPrices.forEach { price ->
+                LiveStationPriceRow(price)
+                Spacer(Modifier.height(8.dp))
+            }
+        } else {
+            station.prices.forEach { price ->
+                StationPriceRow(price)
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+
+        OpeningHoursSection(liveDetails)
+        LiveContactSection(liveDetails)
 
         Spacer(Modifier.height(16.dp))
         Text("SOURCE", style = MaterialTheme.typography.labelMedium)
@@ -259,6 +288,77 @@ private fun StationDetailsContent(
         Spacer(Modifier.height(16.dp))
     }
 }
+
+@Composable
+private fun LiveStatus(liveDetails: LiveStationDetails?, isLoading: Boolean) {
+    if (isLoading) {
+        Spacer(Modifier.height(16.dp))
+        Text("Checking live details…", style = MaterialTheme.typography.bodySmall)
+        return
+    }
+    val status = visibleLiveStatus(liveDetails?.let { liveOpenStatus(it.openingHours) }) ?: return
+    Spacer(Modifier.height(16.dp))
+    val label = when (status.state) {
+        LiveOpenState.OPEN -> "Open now"
+        LiveOpenState.CLOSED -> "Closed"
+        LiveOpenState.UNKNOWN -> return
+    }
+    val color = when (status.state) {
+        LiveOpenState.OPEN -> MaterialTheme.colorScheme.primary
+        LiveOpenState.CLOSED -> MaterialTheme.colorScheme.error
+        LiveOpenState.UNKNOWN -> return
+    }
+    Text(label, style = MaterialTheme.typography.titleMedium, color = color)
+    status.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+}
+
+@Composable
+private fun OpeningHoursSection(liveDetails: LiveStationDetails?) {
+    if (!shouldShowOpeningHoursSection(liveDetails?.openingHours.orEmpty())) return
+    Spacer(Modifier.height(16.dp))
+    Text("OPENING HOURS", style = MaterialTheme.typography.labelMedium)
+    Spacer(Modifier.height(6.dp))
+    DayOfWeek.entries.forEach { day ->
+        val entry = liveDetails?.openingHours?.firstOrNull { it.dayOfWeek == day }
+        DataRow(day.displayName(), openingHoursLabel(entry))
+    }
+}
+
+internal fun visibleLiveStatus(status: LiveOpenStatus?): LiveOpenStatus? =
+    status?.takeIf { it.state != LiveOpenState.UNKNOWN }
+
+internal fun shouldShowOpeningHoursSection(
+    entries: List<OpeningHoursEntry>
+): Boolean = entries.any { entry ->
+    !entry.isNotCommunicated && !entry.isMalformed &&
+        (entry.is24Hours || entry.isClosed || entry.ranges.isNotEmpty())
+}
+
+@Composable
+private fun LiveContactSection(liveDetails: LiveStationDetails?) {
+    liveDetails ?: return
+    val contacts = listOf(
+        "Phone" to liveDetails.phoneNumber,
+        "Website" to liveDetails.website,
+        "Email" to liveDetails.email
+    ).mapNotNull { (label, value) ->
+        value?.trim()?.takeIf(String::isNotEmpty)?.let { label to it }
+    }
+    if (contacts.isEmpty() && liveDetails.services.isEmpty()) return
+    Spacer(Modifier.height(16.dp))
+    Text("LIVE DETAILS", style = MaterialTheme.typography.labelMedium)
+    Spacer(Modifier.height(6.dp))
+    contacts.forEach { (label, value) -> DataRow("$label:", value) }
+    if (liveDetails.services.isNotEmpty()) {
+        Text(
+            "Services: ${liveDetails.services.joinToString(", ")}",
+            style = MaterialTheme.typography.bodyMedium
+        )
+    }
+}
+
+private fun DayOfWeek.displayName(): String =
+    name.lowercase(Locale.ROOT).replaceFirstChar { it.titlecase(Locale.ROOT) }
 
 @Composable
 private fun StationInfo(station: StationDetails) {
@@ -293,6 +393,29 @@ private fun StationPriceRow(price: StationPrice) {
         Text(price.fuelName, style = MaterialTheme.typography.bodySmall)
         price.communicatedLabel?.let {
             Text("Communicated $it", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun LiveStationPriceRow(price: LiveCngPrice) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.medium)
+            .padding(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(price.priceLabel, style = MaterialTheme.typography.titleMedium)
+            Text(price.serviceLabel, style = MaterialTheme.typography.labelLarge)
+        }
+        Text(price.fuelName, style = MaterialTheme.typography.bodySmall)
+        price.validityDate?.let {
+            Text("Valid $it", style = MaterialTheme.typography.bodySmall)
         }
     }
 }

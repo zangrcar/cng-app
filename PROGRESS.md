@@ -20,8 +20,8 @@ android-native
 
 ## Implementation phases
 
-- [ ] 1. Full-screen MapLibre map + working settings drawer (implementation/build complete; device gesture verification pending)
-- [ ] 2. GPS/current-location support + recenter action
+- [x] 1. Full-screen MapLibre map + working settings drawer
+- [x] 2. GPS/current-location support + recenter action
 - [ ] 3. Local Room database + MIMIT station-data refresh + data-status UI
 - [ ] 4. Show local stations for map viewport + Search this area + clustering
 - [ ] 5. Station bottom sheet + live details + Google Maps navigation
@@ -31,20 +31,31 @@ android-native
 
 ## Current task
 
-Phase 1 usability fix implemented. Final device gesture verification is pending. Phase 2 has not been started.
+Phase 2 complete and manually verified on a physical device. Phase 3 has not been started.
 
 Implemented:
 - MapLibre Native Android 13.3.1 using the stable OpenGL `android-sdk` artifact
 - full-screen native MapView hosted in Compose with AndroidView
 - OpenFreeMap Liberty style and temporary startup camera over Italy
 - MapView lifecycle and saved-state forwarding in MainActivity
-- top-left menu button opening a dismissible Material 3 modal drawer
+- visible black circular top-left menu button opening a dismissible Material 3 modal drawer
 - drawer gestures enabled only while open: edge swipes cannot open it, while swipe-left can close it
 - drawer close button plus normal scrim-tap dismissal
 - drawer contains only "CNG Italy" and "Map ready"
 - built-in MapLibre logo and attribution/info control retained in the bottom-left
 - built-in MapLibre compass retained and positioned below the status bar using system insets
 - INTERNET permission
+
+Phase 2 implemented:
+- foreground coarse/fine location permissions only
+- no automatic permission dialog on startup
+- MapLibre built-in LocationComponent and default location engine
+- normal MapLibre current-location puck after style load and permission grant
+- one-time startup centering at zoom 10 when permission already exists
+- bottom-right current-location button with navigation-bar inset handling
+- button requests permission when needed and performs the original one-time zoom 10 recenter when location is available
+- denial and waiting feedback through a Material Snackbar
+- camera remains in `CameraMode.NONE`, so the map never continuously follows location
 
 ## Verification
 
@@ -66,7 +77,20 @@ Phase 1 drawer/map usability fix (2026-08-30):
 - removed the temporary custom attribution text overlay and restored MapLibre's normal built-in attribution presentation
 - `./gradlew.bat test`: PASS
 - `./gradlew.bat assembleDebug`: PASS
-- physical pan/pinch/rotate, drawer gestures, and compass interaction verification: pending device/emulator check
+- physical-device verification: PASS
+- verified map pan, pinch zoom, rotation, drawer gesture/button/X/scrim behavior, compass visibility/north reset, and MapLibre attribution
+
+Phase 2 (2026-08-30):
+- `./gradlew.bat test`: PASS
+- `./gradlew.bat assembleDebug`: PASS
+- physical-device location permission, puck, initial center, recenter, denial, and free-camera behavior: PASS (user verified)
+- physical-device verification was completed before the later UI corrections below
+
+Phase 2 UI corrections (2026-08-30):
+- restored the original current-location button recenter zoom of 10; automatic startup zoom remains 10
+- made the menu control a 48 dp black circle with a white icon, aligned using the same status-bar inset and 8 dp edge margin as the compass
+- `./gradlew.bat test`: PASS
+- `./gradlew.bat assembleDebug`: PASS
 
 ## Important discoveries
 

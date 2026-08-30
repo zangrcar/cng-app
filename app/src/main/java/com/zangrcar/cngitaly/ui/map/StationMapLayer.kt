@@ -19,20 +19,55 @@ import org.maplibre.geojson.Point
 import com.zangrcar.cngitaly.data.MapStation
 
 class StationMapLayer(
-    private val map: MapLibreMap,
-    style: Style
+    private val map: MapLibreMap
 ) : MapLibreMap.OnMapClickListener {
     init {
+        map.addOnMapClickListener(this)
+    }
+
+    fun render(stations: List<MapStation>): Boolean {
+        val style = map.style ?: return false
+        val featureCollection = stations.toFeatureCollection()
+        val geoJson = featureCollection.toJson()
+        Log.d(LOG_TAG, "Recreating source: stations=${stations.size} jsonLength=${geoJson.length}")
+
+        removeStationStyleObjects(style)
         style.addSource(
             GeoJsonSource(
                 SOURCE_ID,
-                FeatureCollection.fromFeatures(emptyList()),
+                geoJson,
                 GeoJsonOptions()
                     .withCluster(true)
                     .withClusterRadius(50)
                     .withClusterMaxZoom(14)
             )
         )
+        Log.d(LOG_TAG, "Source recreated: sourceExists=${style.getSource(SOURCE_ID) != null}")
+        addStationLayers(style)
+        Log.d(
+            LOG_TAG,
+            "Layers recreated: " +
+                "cluster=${style.getLayer(CLUSTER_CIRCLE_LAYER_ID) != null} " +
+                "count=${style.getLayer(CLUSTER_COUNT_LAYER_ID) != null} " +
+                "station=${style.getLayer(STATION_CIRCLE_LAYER_ID) != null} " +
+                "price=${style.getLayer(STATION_PRICE_LAYER_ID) != null}"
+        )
+        return true
+    }
+
+    private fun removeStationStyleObjects(style: Style) {
+        listOf(
+            CLUSTER_COUNT_LAYER_ID,
+            CLUSTER_CIRCLE_LAYER_ID,
+            STATION_PRICE_LAYER_ID,
+            STATION_CIRCLE_LAYER_ID
+        ).forEach { layerId ->
+            style.getLayer(layerId)?.let(style::removeLayer)
+        }
+        style.getSource(SOURCE_ID)?.let(style::removeSource)
+    }
+
+    private fun addStationLayers(style: Style) {
         style.addLayer(
             CircleLayer(STATION_CIRCLE_LAYER_ID, SOURCE_ID)
                 .withFilter(isNotCluster())
@@ -81,29 +116,6 @@ class StationMapLayer(
                     PropertyFactory.textIgnorePlacement(true)
                 )
         )
-        Log.d(
-            LOG_TAG,
-            "MapLibre install: sourceExists=${style.getSource(SOURCE_ID) != null}, " +
-                "clusterCircle=${style.getLayer(CLUSTER_CIRCLE_LAYER_ID) != null}, " +
-                "clusterCount=${style.getLayer(CLUSTER_COUNT_LAYER_ID) != null}, " +
-                "stationCircle=${style.getLayer(STATION_CIRCLE_LAYER_ID) != null}, " +
-                "stationPrice=${style.getLayer(STATION_PRICE_LAYER_ID) != null}"
-        )
-        map.addOnMapClickListener(this)
-    }
-
-    fun update(stations: List<MapStation>): Boolean {
-        val featureCollection = stations.toFeatureCollection()
-        Log.d(LOG_TAG, "Map result: features=${featureCollection.features()?.size ?: 0}")
-        val currentStyle = map.style
-        val source = currentStyle?.getSourceAs<GeoJsonSource>(SOURCE_ID)
-        Log.d(
-            LOG_TAG,
-            "MapLibre update: sourceExists=${source != null}, styleLoaded=${currentStyle != null}"
-        )
-        if (source == null) return false
-        source.setGeoJson(featureCollection)
-        return true
     }
 
     fun logRenderDiagnostics(width: Int, height: Int) {
@@ -173,15 +185,9 @@ class StationMapLayer(
         private const val STATION_CIRCLE_LAYER_ID = "cng-station-circles"
         private const val STATION_PRICE_LAYER_ID = "cng-station-prices"
 
-        private fun isCluster(): Expression = Expression.eq(
-            Expression.get("cluster"),
-            Expression.literal(true)
-        )
+        private fun isCluster(): Expression = Expression.has("point_count")
 
-        private fun isNotCluster(): Expression = Expression.neq(
-            Expression.get("cluster"),
-            Expression.literal(true)
-        )
+        private fun isNotCluster(): Expression = Expression.not(Expression.has("point_count"))
     }
 }
 

@@ -101,9 +101,9 @@ class MainActivity : ComponentActivity() {
             map.setStyle("https://tiles.openfreemap.org/styles/liberty") { style ->
                 loadedStyle = style
                 stationMapLayer?.destroy()
-                stationMapLayer = StationMapLayer(map, style).also {
+                stationMapLayer = StationMapLayer(map).also {
                     val stations = mainViewModel.stations.value
-                    if (!it.update(stations) && stations.isNotEmpty()) searchAreaVisible = true
+                    if (!it.render(stations) && stations.isNotEmpty()) searchAreaVisible = true
                 }
                 if (hasForegroundLocationPermission()) {
                     val willCenterOnLocation = !hasCenteredOnLocation
@@ -135,7 +135,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             mainViewModel.stations.collect { stations ->
                 val layer = stationMapLayer
-                if (layer != null && !layer.update(stations) && stations.isNotEmpty()) {
+                if (layer != null && !layer.render(stations) && stations.isNotEmpty()) {
                     searchAreaVisible = true
                 }
                 mapView.postDelayed(

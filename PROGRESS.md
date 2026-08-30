@@ -38,7 +38,7 @@ Phase 3 / Phase 3A is complete and manually verified on a physical device.
 Phase 4 is the current task. It is implemented and build-verified, awaiting physical-device verification. Phase 5 has not been started.
 
 Implemented:
-- MapLibre Native Android 13.3.1 using the stable OpenGL `android-sdk` artifact
+- MapLibre Native Android 13.3.1 using the explicit OpenGL `android-sdk-opengl` artifact
 - full-screen native MapView hosted in Compose with AndroidView
 - OpenFreeMap Liberty style and temporary startup camera over Italy
 - MapView lifecycle and saved-state forwarding in MainActivity
@@ -81,7 +81,7 @@ Phase 4 implemented:
 - initial Italy/GPS viewport and GPS recenter perform one local station search
 - user camera gestures only mark the viewport dirty after camera idle; no database work occurs during movement
 - compact top-center Search this area action queries the current visible bounds on demand
-- one persistent clustered GeoJSON source with cluster radius 50 and max cluster zoom 14
+- a clustered GeoJSON source with cluster radius 50 and max cluster zoom 14, recreated with complete data for each station result
 - cluster circle/count and individual circle/price style layers; no deprecated marker annotations
 - cluster taps use MapLibre expansion zoom and do not trigger a new Room query or dirty state
 - successful MIMIT refresh reruns the last searched bounds, or searches the current viewport after first-run data arrives
@@ -165,9 +165,29 @@ Phase 4 MapLibre layer correction (2026-08-30):
 - `./gradlew.bat assembleDebug`: PASS
 - corrected filters and new source/render diagnostics await physical-device verification; Phase 4 remains pending
 
+MapLibre renderer dependency correction (2026-08-30):
+- Phase 1 accidentally used `org.maplibre.gl:android-sdk:13.3.1`, the default Vulkan renderer in MapLibre Android 13.x, despite progress documentation claiming OpenGL
+- switched the single MapLibre dependency to the explicit OpenGL artifact `org.maplibre.gl:android-sdk-opengl:13.3.1`; the version remains 13.3.1
+- station rendering implementation was intentionally left unchanged
+- `./gradlew.bat clean`: PASS
+- `./gradlew.bat test`: PASS (20 tests)
+- `./gradlew.bat assembleDebug`: PASS
+- Phase 4 remains pending physical-device verification
+
+Phase 4 populated-source recreation (2026-08-30):
+- physical-device diagnostics showed `querySourceFeatures=0` and `queryRenderedFeatures=0` after dynamic `setGeoJson`, despite hundreds or thousands of valid features reaching the current source
+- stopped using the dynamic GeoJSON update path: each render removes current station layer objects and source, serializes the complete FeatureCollection, creates a new clustered `GeoJsonSource` containing that raw JSON, and recreates the four layers
+- removed `withSynchronousUpdate(true)` and all station-rendering calls to `setGeoJson`
+- restored common MapLibre clustering filters: cluster layers have `point_count`; individual layers do not have `point_count`
+- cluster clicks continue to retrieve the current source from the current style
+- retained concise source recreation, layer recreation, source-query, and rendered-query diagnostics
+- `./gradlew.bat test`: PASS (20 tests)
+- `./gradlew.bat assembleDebug`: PASS
+- Phase 4 remains pending physical-device verification
+
 ## Important discoveries
 
-- MapLibre's stable OpenGL Android artifact is `org.maplibre.gl:android-sdk:13.3.1`.
+- MapLibre Android 13.x uses Vulkan for `org.maplibre.gl:android-sdk`; the explicit OpenGL artifact is `org.maplibre.gl:android-sdk-opengl:13.3.1`.
 - AGP 9 built-in Kotlin requires `android.disallowKotlinSourceSets=false` for the required KSP-generated Room sources.
 
 ## Deviations from DESIGN.md

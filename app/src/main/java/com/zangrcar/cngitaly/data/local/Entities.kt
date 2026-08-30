@@ -3,6 +3,8 @@ package com.zangrcar.cngitaly.data.local
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
+import androidx.room.Embedded
+import androidx.room.Relation
 
 @Entity(
     tableName = "stations",
@@ -49,4 +51,10 @@ data class DatasetMetaEntity(
     val priceDatasetDate: String?,
     val lastSuccessfulRefreshEpochMillis: Long,
     val stationCount: Int
+)
+
+data class StationWithPrices(
+    @Embedded val station: StationEntity,
+    @Relation(parentColumn = "id", entityColumn = "stationId")
+    val prices: List<CngPriceEntity>
 )

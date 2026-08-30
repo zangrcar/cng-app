@@ -186,6 +186,11 @@ If offline:
 
 Never erase valid local data because a refresh fails.
 
+Future offline-map work, intentionally not part of Phase 4:
+- bundle the map style with the APK;
+- support a downloadable and updateable MapLibre offline region for Italy;
+- choose a sensible maximum offline zoom to control download size.
+
 ## Architecture principles
 
 Native Android only.

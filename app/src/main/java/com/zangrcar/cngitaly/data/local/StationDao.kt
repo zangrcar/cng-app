@@ -11,6 +11,31 @@ interface StationDao {
     @Query("SELECT * FROM dataset_meta WHERE id = 1")
     fun observeMeta(): Flow<DatasetMetaEntity?>
 
+    @Query("SELECT * FROM dataset_meta WHERE id = 1")
+    suspend fun getMeta(): DatasetMetaEntity?
+
+    @Query("SELECT COUNT(*) FROM stations")
+    suspend fun getStationCount(): Int
+
+    @Transaction
+    @Query(
+        """
+        SELECT * FROM stations
+        WHERE latitude BETWEEN :south AND :north
+          AND (
+            (:west <= :east AND longitude BETWEEN :west AND :east)
+            OR
+            (:west > :east AND (longitude >= :west OR longitude <= :east))
+          )
+        """
+    )
+    suspend fun getStationsInBounds(
+        north: Double,
+        south: Double,
+        east: Double,
+        west: Double
+    ): List<StationWithPrices>
+
     @Insert
     suspend fun insertStations(stations: List<StationEntity>)
 

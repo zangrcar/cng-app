@@ -62,6 +62,8 @@ fun MapScreen(
     locationMessage: String?,
     onLocationMessageShown: () -> Unit,
     onCurrentLocationClick: () -> Unit,
+    searchAreaVisible: Boolean,
+    onSearchThisAreaClick: () -> Unit,
     viewModel: MainViewModel
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -116,6 +118,17 @@ fun MapScreen(
                     .statusBarsPadding()
                     .padding(top = 64.dp, end = 8.dp)
             )
+            if (searchAreaVisible) {
+                Button(
+                    onClick = onSearchThisAreaClick,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(top = 8.dp)
+                ) {
+                    Text("Search this area")
+                }
+            }
             FilledIconButton(
                 onClick = onCurrentLocationClick,
                 modifier = Modifier

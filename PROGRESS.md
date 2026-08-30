@@ -22,8 +22,8 @@ android-native
 
 - [x] 1. Full-screen MapLibre map + working settings drawer
 - [x] 2. GPS/current-location support + recenter action
-- [ ] 3. Local Room database + MIMIT station-data refresh + data-status UI
-- [ ] 4. Show local stations for map viewport + Search this area + clustering
+- [x] 3. Local Room database + MIMIT station-data refresh + data-status UI
+- [ ] 4. Show local stations for map viewport + Search this area + clustering (implemented/build-verified; physical verification pending)
 - [ ] 5. Station bottom sheet + live details + Google Maps navigation
 - [ ] 6. Search for another place
 - [ ] 7. A -> B route mode + stations along route
@@ -33,7 +33,9 @@ android-native
 
 Phase 1 and Phase 2 are complete and manually verified on a physical device.
 
-Phase 3A is implemented and build-verified, awaiting physical/manual verification. Phase 3 is not complete and Phase 4 has not been started.
+Phase 3 / Phase 3A is complete and manually verified on a physical device.
+
+Phase 4 is the current task. It is implemented and build-verified, awaiting physical-device verification. Phase 5 has not been started.
 
 Implemented:
 - MapLibre Native Android 13.3.1 using the stable OpenGL `android-sdk` artifact
@@ -72,6 +74,19 @@ Phase 3A implemented:
 - drawer DATA section with refresh time, MIMIT date, station count, connection, and refresh progress/action
 - one non-blocking first-run refresh only when no snapshot exists and validated internet is available
 - no station markers, viewport queries, clustering, or Search this area
+
+Phase 4 implemented:
+- Room viewport query returns stations with all stored CNG prices and supports antimeridian-crossing bounds
+- compact map model selects the lowest stored CNG price and formats it with exactly three decimals
+- initial Italy/GPS viewport and GPS recenter perform one local station search
+- user camera gestures only mark the viewport dirty after camera idle; no database work occurs during movement
+- compact top-center Search this area action queries the current visible bounds on demand
+- one persistent clustered GeoJSON source with cluster radius 50 and max cluster zoom 14
+- cluster circle/count and individual circle/price style layers; no deprecated marker annotations
+- cluster taps use MapLibre expansion zoom and do not trigger a new Room query or dirty state
+- successful MIMIT refresh reruns the last searched bounds, or searches the current viewport after first-run data arrives
+- station querying works from Room without contacting MIMIT
+- no station details, live API, place search, route UI, Google Maps action, or offline-map implementation
 
 ## Verification
 
@@ -113,8 +128,42 @@ Phase 3A (2026-08-30):
 - total unit tests: 14 PASS
 - `./gradlew.bat test`: PASS
 - `./gradlew.bat assembleDebug`: PASS
-- physical/manual database refresh, first-run, freshness, connectivity, and failure-preservation verification: pending
-- Phase 3 remains incomplete pending this verification; Phase 4 not started
+- physical/manual verification: PASS
+- verified real and manual MIMIT refresh, sensible count/date, connectivity changes, offline failure preservation, no-data offline startup, and prior map/GPS/drawer behavior
+- Phase 3 complete
+
+Phase 4 (2026-08-30):
+- display-price selection tests added: 5 PASS
+- GeoJSON conversion test added: verifies longitude/latitude ordering and all marker properties used by the style
+- total unit tests: 20 PASS
+- `./gradlew.bat test`: PASS
+- `./gradlew.bat assembleDebug`: PASS
+- physical-device viewport search, clustering, prices, cluster expansion, and refresh requery verification: pending
+- Phase 5 not started
+
+Phase 4 rendering/search correction (2026-08-30):
+- physical-device symptom: viewport searches completed and hid Search this area, but rendered no stations or clusters
+- root cause in the rendering handoff: station updates retained and mutated the `GeoJsonSource` instance created with an earlier style instead of resolving the source from the currently loaded MapLibre style
+- station updates now get `map.style` and `getSourceAs<GeoJsonSource>("cng-stations")` for every update; existing results are still pushed immediately after source/layer installation, covering both style-first and Room-first ordering
+- a non-empty result whose current style/source cannot be resolved is not treated as a completed visible map update; Search this area remains available
+- `CngMap` diagnostic logs now trace bounds, metadata versus actual station-table count, DAO results, mapped results, GeoJSON feature count, current source/style state, and source/layer installation
+- DAO viewport SQL, MapLibre bounds field mapping, antimeridian handling, `Point.fromLngLat(longitude, latitude)`, cluster filters, individual filters, and top-of-style layer insertion were inspected and retained as correct
+- `./gradlew.bat test`: PASS
+- `./gradlew.bat assembleDebug`: PASS
+- physical-device verification remains pending
+
+Phase 4 MapLibre layer correction (2026-08-30):
+- follow-up device evidence proved the complete data path through current-source update: 1,115 Room rows mapped to 1,115 GeoJSON features with `sourceExists=true` and `styleLoaded=true`, while no markers rendered
+- the remaining code-level rendering fault was the layer filter setup: it inferred individual points with `not(has("point_count"))` instead of using MapLibre's generated `cluster` boolean property
+- cluster layers now use `cluster == true`; individual layers use `cluster != true`
+- cluster count and station price use direct `Expression.get(...)` text fields; both symbol layers allow overlap and ignore placement
+- final top-of-style order is station circle, station price, cluster circle, cluster count; circle opacity is explicitly 1
+- the source remains a single clustered `GeoJsonSource` configured with radius 50 and max cluster zoom 14, and every layer uses that same source ID
+- delayed `CngMap` diagnostics now log `querySourceFeatures(null)` count, rendered-feature count over the visible map rectangle, and existence/visibility/filter for all four intended layers after source updates and on camera idle
+- no diagnostic all-points layer remains in the finished implementation
+- `./gradlew.bat test`: PASS (20 tests)
+- `./gradlew.bat assembleDebug`: PASS
+- corrected filters and new source/render diagnostics await physical-device verification; Phase 4 remains pending
 
 ## Important discoveries
 

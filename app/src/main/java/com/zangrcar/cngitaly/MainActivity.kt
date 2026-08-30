@@ -10,13 +10,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import com.zangrcar.cngitaly.data.MapBounds
 import com.zangrcar.cngitaly.ui.MapScreen
+import com.zangrcar.cngitaly.ui.map.StationMapLayer
 import com.zangrcar.cngitaly.ui.theme.CNGItalyTheme
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
@@ -31,6 +34,7 @@ import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val mainViewModel: MainViewModel by viewModels()
@@ -41,12 +45,15 @@ class MainActivity : ComponentActivity() {
     private var centerWhenLocationArrives = false
     private var requestingCenterLocation = false
     private var locationMessage by mutableStateOf<String?>(null)
+    private var searchAreaVisible by mutableStateOf(false)
+    private var userGestureMovement = false
+    private var stationMapLayer: StationMapLayer? = null
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions.values.any { it }) {
-            enableLocationAndCenter(showWaiting = true)
+            enableLocationAndCenter(showWaiting = true, forceCenter = true)
         } else {
             locationMessage = "Location permission is needed to show your current position."
         }
@@ -79,10 +86,31 @@ class MainActivity : ComponentActivity() {
         mapView.onCreate(savedInstanceState)
         mapView.getMapAsync { map ->
             this.map = map
+            map.addOnCameraMoveStartedListener { reason ->
+                if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
+                    userGestureMovement = true
+                }
+            }
+            map.addOnCameraIdleListener {
+                if (userGestureMovement) {
+                    userGestureMovement = false
+                    searchAreaVisible = true
+                }
+                stationMapLayer?.logRenderDiagnostics(mapView.width, mapView.height)
+            }
             map.setStyle("https://tiles.openfreemap.org/styles/liberty") { style ->
                 loadedStyle = style
+                stationMapLayer?.destroy()
+                stationMapLayer = StationMapLayer(map, style).also {
+                    val stations = mainViewModel.stations.value
+                    if (!it.update(stations) && stations.isNotEmpty()) searchAreaVisible = true
+                }
                 if (hasForegroundLocationPermission()) {
+                    val willCenterOnLocation = !hasCenteredOnLocation
                     enableLocationAndCenter(showWaiting = false)
+                    if (!willCenterOnLocation) mapView.post { searchCurrentViewport(false) }
+                } else {
+                    mapView.post { searchCurrentViewport(false) }
                 }
             }
             map.uiSettings.isLogoEnabled = true
@@ -104,6 +132,23 @@ class MainActivity : ComponentActivity() {
                     .build()
             }
         }
+        lifecycleScope.launch {
+            mainViewModel.stations.collect { stations ->
+                val layer = stationMapLayer
+                if (layer != null && !layer.update(stations) && stations.isNotEmpty()) {
+                    searchAreaVisible = true
+                }
+                mapView.postDelayed(
+                    { layer?.logRenderDiagnostics(mapView.width, mapView.height) },
+                    750L
+                )
+            }
+        }
+        lifecycleScope.launch {
+            mainViewModel.viewportSearchRequests.collect {
+                mapView.post { searchCurrentViewport(false) }
+            }
+        }
         enableEdgeToEdge()
         setContent {
             CNGItalyTheme {
@@ -112,6 +157,8 @@ class MainActivity : ComponentActivity() {
                     locationMessage = locationMessage,
                     onLocationMessageShown = { locationMessage = null },
                     onCurrentLocationClick = ::onCurrentLocationClick,
+                    searchAreaVisible = searchAreaVisible,
+                    onSearchThisAreaClick = { searchCurrentViewport(true) },
                     viewModel = mainViewModel
                 )
             }
@@ -131,6 +178,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        stationMapLayer?.destroy()
         map?.locationComponent?.locationEngine?.removeLocationUpdates(centerLocationCallback)
         mapView.onDestroy()
         super.onDestroy()
@@ -210,14 +258,42 @@ class MainActivity : ComponentActivity() {
         centerWhenLocationArrives = false
         hasCenteredOnLocation = true
         val map = map ?: return
+        searchAreaVisible = false
         map.locationComponent.cameraMode = CameraMode.NONE
         map.animateCamera(
             CameraUpdateFactory.newLatLngZoom(
                 LatLng(location.latitude, location.longitude),
                 10.5
             ),
-            700
+            700,
+            object : MapLibreMap.CancelableCallback {
+                override fun onFinish() {
+                    searchCurrentViewport(false)
+                }
+
+                override fun onCancel() = Unit
+            }
         )
+    }
+
+    private fun searchCurrentViewport(userInitiated: Boolean) {
+        val map = map ?: return
+        if (loadedStyle == null) return
+        if (mapView.width == 0 || mapView.height == 0) {
+            mapView.post { searchCurrentViewport(userInitiated) }
+            return
+        }
+        val bounds = map.projection.visibleRegion.latLngBounds
+        mainViewModel.searchStations(
+            MapBounds(
+                north = bounds.latitudeNorth,
+                south = bounds.latitudeSouth,
+                east = bounds.longitudeEast,
+                west = bounds.longitudeWest
+            ),
+            userInitiated = userInitiated
+        )
+        searchAreaVisible = false
     }
 
     companion object {

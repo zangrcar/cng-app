@@ -1,5 +1,6 @@
 package com.zangrcar.cngitaly.data
 
+import android.util.Log
 import com.zangrcar.cngitaly.data.local.CngPriceEntity
 import com.zangrcar.cngitaly.data.local.DatasetMetaEntity
 import com.zangrcar.cngitaly.data.local.StationDao
@@ -12,6 +13,22 @@ class StationRepository(
     private val downloader: MimitDownloader = MimitDownloader()
 ) {
     val metadata: Flow<DatasetMetaEntity?> = dao.observeMeta()
+
+    suspend fun hasLocalData(): Boolean = dao.getMeta() != null
+
+    suspend fun getStoredStationCounts(): Pair<Int?, Int> =
+        dao.getMeta()?.stationCount to dao.getStationCount()
+
+    suspend fun getStationsInBounds(bounds: MapBounds): List<MapStation> {
+        val roomStations = dao.getStationsInBounds(
+            north = bounds.north,
+            south = bounds.south,
+            east = bounds.east,
+            west = bounds.west
+        )
+        Log.d("CngMap", "Room result: stations=${roomStations.size}")
+        return roomStations.mapNotNull { it.toMapStation() }
+    }
 
     suspend fun refresh() {
         val snapshot = downloader.downloadSnapshot()

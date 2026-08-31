@@ -41,9 +41,15 @@ class PhotonClient(
         ): Boolean = size > CACHE_SIZE
     }
 
-    suspend fun search(query: String): List<PlaceSearchResult> {
-        val cacheKey = normalizePlaceQuery(query)
-        if (cacheKey.isEmpty()) return emptyList()
+    suspend fun search(
+        query: String,
+        countryCodes: List<String> = listOf("IT")
+    ): List<PlaceSearchResult> {
+        val normalizedQuery = normalizePlaceQuery(query)
+        val normalizedCountries = countryCodes.map { it.trim().uppercase(Locale.ROOT) }
+            .filter(String::isNotEmpty).distinct().sorted()
+        val cacheKey = photonCacheKey(normalizedQuery, normalizedCountries)
+        if (normalizedQuery.isEmpty()) return emptyList()
         cacheMutex.withLock { cache[cacheKey]?.let { return it } }
 
         rateLimitMutex.withLock {
@@ -59,12 +65,7 @@ class PhotonClient(
             .lowercase(Locale.ROOT)
             .takeIf { it in setOf("de", "en", "fr", "it") }
             ?: "en"
-        val url = BASE_URL.toHttpUrl().newBuilder()
-            .addQueryParameter("q", query.trim())
-            .addQueryParameter("limit", "10")
-            .addQueryParameter("countrycode", "IT")
-            .addQueryParameter("lang", language)
-            .build()
+        val url = buildPhotonUrl(query, normalizedCountries, language)
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", USER_AGENT)
@@ -111,6 +112,17 @@ class PhotonClient(
         private const val MIN_REQUEST_INTERVAL_NANOS = 1_000_000_000L
     }
 }
+
+internal fun buildPhotonUrl(query: String, countryCodes: List<String>, language: String) =
+    "https://photon.komoot.io/api".toHttpUrl().newBuilder()
+        .addQueryParameter("q", query.trim())
+        .addQueryParameter("limit", "10")
+        .addQueryParameter("lang", language)
+        .also { builder -> countryCodes.forEach { builder.addQueryParameter("countrycode", it) } }
+        .build()
+
+internal fun photonCacheKey(normalizedQuery: String, countryCodes: List<String>): String =
+    "$normalizedQuery|${countryCodes.joinToString(",") { it.uppercase(Locale.ROOT) }}"
 
 object PhotonParser {
     fun parse(json: String): List<PlaceSearchResult> {

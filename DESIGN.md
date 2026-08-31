@@ -157,7 +157,9 @@ The user can then pan/zoom and use Search this area.
 
 ## Route mode
 
-Route mode supports arbitrary A -> B.
+Route mode supports an ordered From -> zero or more Stops -> To route (up to
+eight intermediate stops). Stops are visited exactly in their displayed order;
+the app never optimizes or reorders them.
 
 A can be:
 - current location;
@@ -176,15 +178,67 @@ After route calculation:
 
 Stations should be shown near the route, not merely anywhere in the route's huge rectangular bounding box.
 
-There is NO user-configurable route corridor.
+The route sheet offers a session-only station corridor setting. Auto uses 2% of
+route length with a 3 km minimum and 10 km maximum. Fixed choices are 3, 5, 10,
+or 20 km. Changing the setting reruns only the local Room candidate query and
+geometry filter; it never requests a new route.
 
-The useful route corridor should be derived automatically from map scale and bounded to sensible values.
-
-After zooming/panning in route mode:
-- Search this area appears;
-- tapping it recalculates useful visible stations for that part/scale of the route.
+While route mode is active, normal viewport Search this area is suppressed.
+Panning and zooming do not replace the corridor stations.
 
 Google Maps still handles actual driving navigation.
+
+### Phase 7 route behavior
+
+The route flow uses a compact black circular
+route control sits below place search and opens a Material 3 sheet with From and
+To inputs plus optional ordered stops. Each route point owns its query, submitted
+Photon results, error, and selected endpoint, so results render directly beneath
+the field being edited. Each endpoint is selected from an explicitly submitted Photon search;
+raw typed text is never routed. Endpoint searches are global because a trip may
+start outside Italy, while standalone place search remains Italy-only.
+
+From can use the current location through the existing foreground permission and
+location infrastructure. It displays as My location, uses the current coordinates,
+and does not add an A marker because the MapLibre location puck represents it.
+
+The app sends all selected coordinates to the OSRM Route service in displayed
+order, requests one full driving-route GeoJSON geometry, draws it
+below the existing station layers, fits every route point with comfortable map
+padding, and shows a compact distance/duration summary. It does not provide
+turn-by-turn directions or navigation.
+
+Find route validates every point, hides the keyboard, closes the sheet immediately,
+and shows a compact calculating overlay on the map. Failure keeps the draft and
+any previous active route and reports a concise Snackbar.
+
+Active route waypoints use source/layer rendering above station layers: A for a
+non-GPS origin, numbered intermediate stops, and B for destination. Tapping one
+animates to zoom 10.5 without changing route or nearby/search state.
+
+Selecting a standalone Photon result also creates one temporary, session-only
+place marker. Tapping it shows its place name with Route here and Remove marker.
+Route here opens the route sheet with To prefilled and also prefills From with My
+location only when a usable location is already available. A successful matching
+route destination replaces that temporary marker with route waypoint markers.
+
+Route stations are selected by actual geometric distance to the OSRM route, not
+merely by inclusion in the route bounding box. Room first retrieves candidates
+from an expanded geometry bounding box; each candidate is then filtered by its
+minimum straight-line distance to any route polyline segment.
+
+The automatic geometric corridor is:
+
+`(route distance * 2%).coerceIn(3 km, 10 km)`
+
+This is a maximum straight-line distance from route geometry, not a driving
+detour distance. It can be tuned after physical testing.
+
+While a route is active, normal viewport searches and Search this area are
+suppressed. Clearing the route retains the current camera and searches that
+viewport normally. Current-location recentering or standalone place selection
+also clears route mode before returning to nearby behavior.
+
 
 ## Offline behavior
 

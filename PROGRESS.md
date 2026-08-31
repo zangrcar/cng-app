@@ -25,8 +25,8 @@ android-native
 - [x] 3. Local Room database + MIMIT station-data refresh + data-status UI
 - [x] 4. Show local stations for map viewport + Search this area + clustering
 - [x] 5. Station bottom sheet + live details + Google Maps navigation
-- [ ] 6. Search for another place
-- [ ] 7. A -> B route mode + stations along route
+- [x] 6. Search for another place
+- [ ] 7. Ordered route mode + stations along route (7A/7B implemented; physical verification pending)
 - [ ] 8. Offline/polish/testing on real phone
 
 ## Current task
@@ -41,7 +41,11 @@ Phase 5A local station selection/details is physically verified.
 
 Phase 5 is complete and physically verified.
 
-Phase 6 Photon place search is implemented and build-verified, awaiting physical-device verification.
+Phase 6 Photon place search is complete and physically verified.
+
+Phase 7A core A -> B route mode is implemented and build-verified. Physical-device verification is pending.
+
+The current task is Phase 7 physical-device verification after Phase 7B implementation.
 
 Implemented:
 - MapLibre Native Android 13.3.1 using the explicit OpenGL `android-sdk-opengl` artifact
@@ -260,6 +264,36 @@ Phase 6 place-search Back correction (2026-08-31):
 - scrim-tap and swipe-down dismissal remain enabled and continue clearing search UI state
 - `./gradlew.bat test`: PASS
 - `./gradlew.bat assembleDebug`: PASS
+- physical-device verification: PASS
+- Phase 6 complete
+
+Phase 7A core route mode (2026-08-31):
+- compact route control below place search opens a Material 3 From/To sheet
+- both endpoints require selection from explicitly submitted global Photon results; standalone search remains Italy-only and Photon cache keys include normalized query plus country scope
+- cancellable OSRM driving request uses longitude,latitude endpoint order, full GeoJSON overview, no alternatives, steps, or turn-by-turn instructions, and enforces one second between actual request starts
+- ViewModel owns selected endpoint drafts, route loading/error state, the active route, and route-station replacement without destroying an older active route when a new request fails
+- one route GeoJSON source with a white casing and dark main line is installed before the existing station layer for every loaded MapLibre style
+- successful routes fit all geometry points with map padding and retain CameraMode.NONE
+- automatic straight-line corridor is 2% of route distance, clamped to 3-10 km
+- Room uses an expanded route bounding box only as a candidate pre-filter; candidates are then filtered off the main thread by minimum equirectangular point-to-polyline-segment distance
+- route mode reuses the existing clustered station GeoJSON source, reruns corridor filtering after successful MIMIT refresh, suppresses normal Search this area/viewport replacement, and remains visible and locally useful after connectivity loss
+- clearing route mode retains the camera and triggers a normal current-viewport search; GPS recenter and standalone place selection clear route mode before nearby behavior
+- focused OSRM parser, corridor, segment-distance, route filtering, Photon URL scope, and scoped-cache tests added
+- `./gradlew.bat test`: PASS
+- `./gradlew.bat assembleDebug`: PASS
+- physical-device verification: pending
+Phase 7B route UX and waypoint support (2026-08-31):
+- route sheet closes immediately after valid Find route submission; a compact map overlay shows calculation progress and failures use Snackbar while preserving drafts and any prior active route
+- route drafts now have stable per-point identity and independent query, Photon result, loading, error, and selected endpoint state; results render below only their owning field
+- From supports My location through the existing foreground permission/location flow, with inline unavailable/denied feedback and no duplicate A marker over the location puck
+- up to eight removable/reorderable intermediate stops are sent to OSRM Route in exact displayed order; cache keys include all ordered coordinates and RouteResult retains them
+- route waypoint source/layers render A, numbered stops, and B above stations with Liberty-compatible Noto Sans glyphs; waypoint taps take priority and animate to zoom 10.5 without route/search mutation
+- route corridor is session-configurable as Auto (2%, clamped 3-10 km) or fixed 3/5/10/20 km; changes rerun only local Room candidate/filter work against the existing route
+- standalone place selection creates one temporary source/layer marker; its action sheet supports Route here and Remove marker, and successful matching route activation removes it
+- route clearing removes route geometry/waypoints/stops and resumes current-viewport nearby search; route mode continues suppressing normal Search this area
+- focused tests cover OSRM two/multi-point order, automatic/fixed corridors, per-field draft assignment, stop removal/reordering, and place-marker actions
+- `.\gradlew.bat test`: PASS
+- `.\gradlew.bat assembleDebug`: PASS
 - physical-device verification: pending
 
 ## Important discoveries

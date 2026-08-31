@@ -56,6 +56,20 @@ class PhotonClientTest {
         assertTrue(PhotonParser.parse("""{"features":[]}""").isEmpty())
     }
 
+    @Test fun `cache scope distinguishes Italy from global`() {
+        val query = normalizePlaceQuery("Rome")
+        assertEquals("rome|IT", photonCacheKey(query, listOf("IT")))
+        assertEquals("rome|", photonCacheKey(query, emptyList()))
+    }
+
+    @Test fun `standalone URL is Italy only`() {
+        assertEquals(listOf("IT"), buildPhotonUrl("Rome", listOf("IT"), "en").queryParameterValues("countrycode"))
+    }
+
+    @Test fun `global route URL sends no countrycode`() {
+        assertTrue(buildPhotonUrl("Ljubljana", emptyList(), "en").queryParameterValues("countrycode").isEmpty())
+    }
+
     private fun photon(feature: String) = """{"features":[$feature]}"""
     private fun feature(name: String, longitude: Double, latitude: Double) =
         """{"type":"Feature","geometry":{"type":"Point","coordinates":[$longitude,$latitude]},"properties":{"name":"$name"}}"""

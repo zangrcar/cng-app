@@ -30,6 +30,11 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Directions
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
@@ -45,8 +50,12 @@ import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -82,6 +91,11 @@ import com.zangrcar.cngitaly.data.mimit.OpeningHoursEntry
 import com.zangrcar.cngitaly.data.mimit.liveOpenStatus
 import com.zangrcar.cngitaly.data.mimit.openingHoursLabel
 import com.zangrcar.cngitaly.data.geocoding.PlaceSearchResult
+import com.zangrcar.cngitaly.data.routing.RouteEndpoint
+import com.zangrcar.cngitaly.data.routing.RouteResult
+import com.zangrcar.cngitaly.data.routing.RoutePointDraft
+import com.zangrcar.cngitaly.data.routing.RoutePointRole
+import com.zangrcar.cngitaly.data.routing.RouteCorridorSetting
 import kotlinx.coroutines.launch
 import org.maplibre.android.maps.MapView
 import java.time.DayOfWeek
@@ -104,6 +118,10 @@ fun MapScreen(
     searchAreaVisible: Boolean,
     onSearchThisAreaClick: () -> Unit,
     onPlaceSelected: (PlaceSearchResult) -> Unit,
+    onUseRouteLocation: () -> Unit,
+    onPrefillRouteLocationIfAvailable: () -> Unit,
+    searchedPlaceAction: PlaceSearchResult?,
+    onDismissSearchedPlaceAction: () -> Unit,
     viewModel: MainViewModel
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -118,6 +136,7 @@ fun MapScreen(
         viewModel.isLiveDetailsLoading.collectAsStateWithLifecycle().value
     val context = LocalContext.current
     var showPlaceSearch by remember { mutableStateOf(false) }
+    var showRouteSheet by remember { mutableStateOf(false) }
     var placeQuery by remember { mutableStateOf("") }
     val placeResults = viewModel.placeResults.collectAsStateWithLifecycle().value
     val isPlaceSearchLoading =
@@ -129,6 +148,15 @@ fun MapScreen(
         placeQuery = ""
         showPlaceSearch = false
         viewModel.clearPlaceSearch()
+    }
+    val activeRoute = viewModel.activeRoute.collectAsStateWithLifecycle().value
+    val routeDrafts = viewModel.routeDrafts.collectAsStateWithLifecycle().value
+    val corridorSetting = viewModel.routeCorridorSetting.collectAsStateWithLifecycle().value
+    val isRouteLoading = viewModel.isRouteLoading.collectAsStateWithLifecycle().value
+    val routeError = viewModel.routeError.collectAsStateWithLifecycle().value
+    val closeRouteSheet: () -> Unit = {
+        showRouteSheet = false
+        viewModel.dismissRouteSheet()
     }
 
     LaunchedEffect(locationMessage) {
@@ -142,7 +170,7 @@ fun MapScreen(
     }
     BackHandler(
         enabled = drawerState.isOpen && selectedStation == null && !isStationDetailsLoading &&
-            !showPlaceSearch
+            !showPlaceSearch && !showRouteSheet
     ) {
         coroutineScope.launch { drawerState.close() }
     }
@@ -202,8 +230,25 @@ fun MapScreen(
                 ) {
                     Icon(Icons.Default.Search, "Search place")
                 }
+                Spacer(Modifier.height(8.dp))
+                FilledIconButton(
+                    onClick = {
+                        viewModel.clearSelectedStation()
+                        showRouteSheet = true
+                    },
+                    modifier = Modifier.size(48.dp),
+                    colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color.Black, contentColor = Color.White
+                    )
+                ) { Icon(Icons.Default.Directions, "Route") }
             }
-            if (searchAreaVisible) {
+            if (activeRoute != null) {
+                RouteSummary(
+                    route = activeRoute,
+                    onClear = viewModel::clearRoute,
+                    modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 8.dp)
+                )
+            } else if (searchAreaVisible) {
                 Button(
                     onClick = onSearchThisAreaClick,
                     modifier = Modifier
@@ -212,6 +257,14 @@ fun MapScreen(
                         .padding(top = 8.dp)
                 ) {
                     Text("Search this area")
+                }
+            }
+            if (isRouteLoading) {
+                Surface(Modifier.align(Alignment.Center), shape = MaterialTheme.shapes.extraLarge, tonalElevation = 6.dp) {
+                    Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.size(10.dp)); Text("Calculating route…")
+                    }
                 }
             }
             FilledIconButton(
@@ -275,6 +328,127 @@ fun MapScreen(
             )
         }
     }
+    if (showRouteSheet) {
+        ModalBottomSheet(
+            onDismissRequest = closeRouteSheet,
+            properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
+        ) {
+            RouteSheetContent(
+                drafts = routeDrafts,
+                onEdit = viewModel::editRoutePoint,
+                onSearch = viewModel::searchRouteEndpoint,
+                onResultSelected = viewModel::selectRouteEndpoint,
+                onUseLocation = onUseRouteLocation,
+                onAddStop = viewModel::addRouteStop,
+                onRemoveStop = viewModel::removeRouteStop,
+                onMoveStop = viewModel::moveRouteStop,
+                corridorSetting = corridorSetting,
+                onCorridorChange = viewModel::setRouteCorridor,
+                onFindRoute = { if (viewModel.findRoute()) { showRouteSheet = false; viewModel.dismissRouteSheet() } },
+                onDismiss = closeRouteSheet
+            )
+        }
+    }
+    if (searchedPlaceAction != null) {
+        ModalBottomSheet(onDismissRequest = onDismissSearchedPlaceAction) {
+            Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(24.dp)) {
+                Text(searchedPlaceAction.displayName, style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = {
+                    viewModel.routeToSearchedPlace(); onPrefillRouteLocationIfAvailable(); onDismissSearchedPlaceAction(); showRouteSheet = true
+                }, Modifier.fillMaxWidth()) { Text("Route here") }
+                OutlinedButton(onClick = {
+                    viewModel.setSearchedPlaceMarker(null); onDismissSearchedPlaceAction()
+                }, Modifier.fillMaxWidth()) { Text("Remove marker") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteSummary(route: RouteResult, onClear: () -> Unit, modifier: Modifier = Modifier) {
+    val kilometers = (route.distanceMeters / 1000.0).toInt()
+    val totalMinutes = (route.durationSeconds / 60.0).toInt()
+    Surface(modifier = modifier, shape = MaterialTheme.shapes.extraLarge, tonalElevation = 4.dp) {
+        Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("$kilometers km · ${totalMinutes / 60} h ${totalMinutes % 60} min")
+            Spacer(Modifier.size(8.dp))
+            IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Close, "Clear route")
+            }
+        }
+    }
+}
+
+@Composable
+private fun RouteSheetContent(
+    drafts: List<RoutePointDraft>,
+    onEdit: (com.zangrcar.cngitaly.data.routing.RoutePointId, String) -> Unit,
+    onSearch: (com.zangrcar.cngitaly.data.routing.RoutePointId) -> Unit,
+    onResultSelected: (com.zangrcar.cngitaly.data.routing.RoutePointId, PlaceSearchResult) -> Unit,
+    onUseLocation: () -> Unit, onAddStop: () -> Unit,
+    onRemoveStop: (com.zangrcar.cngitaly.data.routing.RoutePointId) -> Unit,
+    onMoveStop: (com.zangrcar.cngitaly.data.routing.RoutePointId, Int) -> Unit,
+    corridorSetting: RouteCorridorSetting, onCorridorChange: (RouteCorridorSetting) -> Unit,
+    onFindRoute: () -> Unit, onDismiss: () -> Unit
+) {
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    var corridorExpanded by remember { mutableStateOf(false) }
+    BackHandler(enabled = !imeVisible) { onDismiss() }
+    Column(Modifier.fillMaxWidth().heightIn(max = 680.dp).navigationBarsPadding()
+        .padding(horizontal = 24.dp, vertical = 8.dp)) {
+        Text("Route", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(16.dp))
+        drafts.forEachIndexed { index, draft ->
+            val label = when (draft.role) { RoutePointRole.FROM -> "FROM"; RoutePointRole.TO -> "TO"; RoutePointRole.STOP -> "STOP ${drafts.take(index + 1).count { it.role == RoutePointRole.STOP }}" }
+            Text(label, style = MaterialTheme.typography.labelMedium)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(value = draft.query, onValueChange = { onEdit(draft.id, it) }, modifier = Modifier.weight(1f), singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { if (draft.query.isNotBlank()) { focusManager.clearFocus(); keyboard?.hide(); onSearch(draft.id) } }))
+                if (draft.role == RoutePointRole.STOP) {
+                    IconButton(onClick = { onMoveStop(draft.id, -1) }) { Icon(Icons.Default.KeyboardArrowUp, "Move stop up") }
+                    IconButton(onClick = { onMoveStop(draft.id, 1) }) { Icon(Icons.Default.KeyboardArrowDown, "Move stop down") }
+                    IconButton(onClick = { onRemoveStop(draft.id) }) { Icon(Icons.Default.Delete, "Remove stop") }
+                }
+            }
+            if (draft.role == RoutePointRole.FROM) Text("Use my location", Modifier.clickable(onClick = onUseLocation).padding(vertical = 8.dp), color = MaterialTheme.colorScheme.primary)
+            if (draft.isSearching) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            draft.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            draft.results.forEach { result -> Text(result.displayName, Modifier.fillMaxWidth().clickable {
+                focusManager.clearFocus(); keyboard?.hide(); onResultSelected(draft.id, result)
+            }.padding(vertical = 10.dp), maxLines = 2, overflow = TextOverflow.Ellipsis) }
+            if (draft.role == RoutePointRole.STOP || draft.role == RoutePointRole.FROM) Spacer(Modifier.height(10.dp))
+            if (draft.role == RoutePointRole.FROM) OutlinedButton(onClick = onAddStop) { Icon(Icons.Default.Add, null); Text("Add stop") }
+        }
+        Spacer(Modifier.height(12.dp)); Text("Show stations within", style = MaterialTheme.typography.labelMedium)
+        Box {
+            OutlinedButton(onClick = { corridorExpanded = true }) { Text(corridorLabel(corridorSetting)); Text(" ▾") }
+            DropdownMenu(expanded = corridorExpanded, onDismissRequest = { corridorExpanded = false }) {
+                listOf(RouteCorridorSetting.Auto, RouteCorridorSetting.Fixed(3000.0), RouteCorridorSetting.Fixed(5000.0), RouteCorridorSetting.Fixed(10000.0), RouteCorridorSetting.Fixed(20000.0)).forEach { option ->
+                    DropdownMenuItem(text = { Text(corridorLabel(option)) }, onClick = { onCorridorChange(option); corridorExpanded = false })
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Button(
+            onClick = { focusManager.clearFocus(); keyboard?.hide(); onFindRoute() },
+            enabled = drafts.all { it.selectedEndpoint != null },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Find route")
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Search data © OpenStreetMap contributors · Geocoding: Photon", style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+private fun corridorLabel(setting: RouteCorridorSetting) = when (setting) {
+    RouteCorridorSetting.Auto -> "Auto"
+    is RouteCorridorSetting.Fixed -> "${(setting.meters / 1000).toInt()} km"
 }
 
 @Composable

@@ -30,6 +30,16 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
+import com.zangrcar.cngitaly.data.routing.NoDrivingRouteException
+import com.zangrcar.cngitaly.data.routing.OsrmClient
+import com.zangrcar.cngitaly.data.routing.RouteEndpoint
+import com.zangrcar.cngitaly.data.routing.RouteResult
+import com.zangrcar.cngitaly.data.routing.RoutePointDraft
+import com.zangrcar.cngitaly.data.routing.RoutePointId
+import com.zangrcar.cngitaly.data.routing.RoutePointRole
+import com.zangrcar.cngitaly.data.routing.RouteCorridorSetting
+import com.zangrcar.cngitaly.data.routing.RouteDrafts
+import com.zangrcar.cngitaly.data.routing.PlaceMarkerActions
 
 data class MainUiState(
     val metadata: DatasetMetaEntity? = null,
@@ -43,6 +53,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = StationRepository(database.stationDao())
     private val liveClient = MimitLiveClient()
     private val photonClient = PhotonClient()
+    private val osrmClient = OsrmClient()
     private val connectivityManager =
         application.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     private val online = MutableStateFlow(hasValidatedInternet())
@@ -69,6 +80,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _hasSubmittedPlaceSearch = MutableStateFlow(false)
     val hasSubmittedPlaceSearch = _hasSubmittedPlaceSearch.asStateFlow()
     private var lastSearchedBounds: MapBounds? = null
+    private var routeJob: Job? = null
+    private val routeSearchJobs = mutableMapOf<RoutePointId, Job>()
+    private var nextRoutePointId = 3L
+    private val _routeDrafts = MutableStateFlow(initialRouteDrafts())
+    val routeDrafts = _routeDrafts.asStateFlow()
+    private val _routeCorridorSetting = MutableStateFlow<RouteCorridorSetting>(RouteCorridorSetting.Auto)
+    val routeCorridorSetting = _routeCorridorSetting.asStateFlow()
+    private val _searchedPlaceMarker = MutableStateFlow<PlaceSearchResult?>(null)
+    val searchedPlaceMarker = _searchedPlaceMarker.asStateFlow()
+    private val _activeRoute = MutableStateFlow<RouteResult?>(null)
+    val activeRoute = _activeRoute.asStateFlow()
+    private val _isRouteLoading = MutableStateFlow(false)
+    val isRouteLoading = _isRouteLoading.asStateFlow()
+    private val _routeError = MutableStateFlow<String?>(null)
+    val routeError = _routeError.asStateFlow()
 
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val messages = _messages.asSharedFlow()
@@ -107,8 +133,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             refreshing.value = true
             try {
                 repository.refresh()
+                val route = _activeRoute.value
                 val searchedBounds = lastSearchedBounds
-                if (searchedBounds != null) {
+                if (route != null) {
+                    _stations.value = repository.getStationsNearRoute(route.points, route.distanceMeters, _routeCorridorSetting.value)
+                } else if (searchedBounds != null) {
                     searchStationsInternal(searchedBounds)
                 } else {
                     viewportSearchRequestChannel.send(Unit)
@@ -123,6 +152,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun searchStations(bounds: MapBounds, userInitiated: Boolean = false) {
+        if (_activeRoute.value != null) return
         if (stationSearchRunning.value) return
         stationSearchRunning.value = true
         viewModelScope.launch {
@@ -230,6 +260,118 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _hasSubmittedPlaceSearch.value = false
     }
 
+    fun editRoutePoint(id: RoutePointId, query: String) = updateDraft(id) {
+        it.copy(query = query, selectedEndpoint = null, results = emptyList(), error = null)
+    }
+
+    fun searchRouteEndpoint(id: RoutePointId) {
+        val query = _routeDrafts.value.firstOrNull { it.id == id }?.query.orEmpty()
+        val submitted = query.trim()
+        if (submitted.isEmpty()) return
+        routeSearchJobs.remove(id)?.cancel()
+        updateDraft(id) { it.copy(results = emptyList(), error = null) }
+        if (!online.value) {
+            updateDraft(id) { it.copy(error = "Place search requires internet.") }
+            return
+        }
+        routeSearchJobs[id] = viewModelScope.launch {
+            updateDraft(id) { it.copy(isSearching = true) }
+            try {
+                val results = photonClient.search(submitted, emptyList())
+                updateDraft(id) { it.copy(results = results) }
+            }
+            catch (exception: CancellationException) { throw exception }
+            catch (_: Exception) { updateDraft(id) { it.copy(error = "Place search unavailable. Try again.") } }
+            finally { updateDraft(id) { it.copy(isSearching = false) } }
+        }
+    }
+
+    fun selectRouteEndpoint(id: RoutePointId, result: PlaceSearchResult) {
+        val endpoint = RouteEndpoint(result.displayName, result.latitude, result.longitude)
+        routeSearchJobs.remove(id)?.cancel()
+        _routeDrafts.value = RouteDrafts.select(_routeDrafts.value, id, endpoint)
+    }
+
+    fun useCurrentLocation(endpoint: RouteEndpoint) {
+        val from = _routeDrafts.value.first { it.role == RoutePointRole.FROM }
+        updateDraft(from.id) { it.copy(query = "My location", selectedEndpoint = endpoint.copy(label = "My location", isCurrentLocation = true), results = emptyList(), error = null) }
+    }
+
+    fun setRoutePointError(id: RoutePointId, message: String?) = updateDraft(id) { it.copy(error = message) }
+    fun setCurrentLocationError(message: String?) {
+        _routeDrafts.value.firstOrNull { it.role == RoutePointRole.FROM }?.let { setRoutePointError(it.id, message) }
+    }
+
+    fun addRouteStop() {
+        if (_routeDrafts.value.count { it.role == RoutePointRole.STOP } >= 8) return
+        val drafts = _routeDrafts.value.toMutableList()
+        drafts.add(drafts.lastIndex, RoutePointDraft(RoutePointId(nextRoutePointId++), RoutePointRole.STOP))
+        _routeDrafts.value = drafts
+    }
+
+    fun removeRouteStop(id: RoutePointId) {
+        routeSearchJobs.remove(id)?.cancel()
+        _routeDrafts.value = RouteDrafts.removeStop(_routeDrafts.value, id)
+    }
+
+    fun moveRouteStop(id: RoutePointId, direction: Int) {
+        _routeDrafts.value = RouteDrafts.moveStop(_routeDrafts.value, id, direction)
+    }
+
+    fun dismissRouteSheet() {
+        routeSearchJobs.values.forEach(Job::cancel); routeSearchJobs.clear()
+        _routeDrafts.value = _routeDrafts.value.map { it.copy(results = emptyList(), isSearching = false, error = null) }
+    }
+
+    fun findRoute(): Boolean {
+        val endpoints = RouteDrafts.endpoints(_routeDrafts.value)
+        if (endpoints.size != _routeDrafts.value.size) return false
+        routeJob?.cancel()
+        _routeError.value = null
+        if (!online.value) {
+            _messages.tryEmit("Route unavailable. Try again.")
+            return true
+        }
+        routeJob = viewModelScope.launch {
+            _isRouteLoading.value = true
+            try {
+                val route = osrmClient.route(endpoints)
+                val routeStations = repository.getStationsNearRoute(route.points, route.distanceMeters, _routeCorridorSetting.value)
+                _activeRoute.value = route
+                _stations.value = routeStations
+                val marker = _searchedPlaceMarker.value
+                if (marker != null && sameCoordinate(marker.latitude, marker.longitude, route.to.latitude, route.to.longitude)) _searchedPlaceMarker.value = null
+            } catch (exception: CancellationException) { throw exception }
+            catch (_: NoDrivingRouteException) { _messages.emit("No driving route found.") }
+            catch (_: Exception) { _messages.emit("Route unavailable. Try again.") }
+            finally { _isRouteLoading.value = false }
+        }
+        return true
+    }
+
+    fun setRouteCorridor(setting: RouteCorridorSetting) {
+        _routeCorridorSetting.value = setting
+        _activeRoute.value?.let { route -> viewModelScope.launch {
+            _stations.value = repository.getStationsNearRoute(route.points, route.distanceMeters, setting)
+        } }
+    }
+
+    fun setSearchedPlaceMarker(place: PlaceSearchResult?) { _searchedPlaceMarker.value = place }
+    fun routeToSearchedPlace() {
+        val place = _searchedPlaceMarker.value ?: return
+        _routeDrafts.value = PlaceMarkerActions.routeHere(_routeDrafts.value, place)
+    }
+
+    fun clearRoute() {
+        routeJob?.cancel()
+        routeJob = null
+        _activeRoute.value = null
+        routeSearchJobs.values.forEach(Job::cancel); routeSearchJobs.clear()
+        _routeDrafts.value = initialRouteDrafts()
+        _routeError.value = null
+        viewportSearchRequestChannel.trySend(Unit)
+    }
+
     override fun onCleared() {
         connectivityManager.unregisterNetworkCallback(networkCallback)
         super.onCleared()
@@ -257,5 +399,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
         return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    }
+
+    private fun updateDraft(id: RoutePointId, transform: (RoutePointDraft) -> RoutePointDraft) {
+        _routeDrafts.value = _routeDrafts.value.map { if (it.id == id) transform(it) else it }
+    }
+
+    companion object {
+        private fun initialRouteDrafts() = listOf(
+            RoutePointDraft(RoutePointId(1), RoutePointRole.FROM),
+            RoutePointDraft(RoutePointId(2), RoutePointRole.TO)
+        )
+        private fun sameCoordinate(aLat: Double, aLon: Double, bLat: Double, bLon: Double) =
+            kotlin.math.abs(aLat - bLat) < 0.000001 && kotlin.math.abs(aLon - bLon) < 0.000001
     }
 }

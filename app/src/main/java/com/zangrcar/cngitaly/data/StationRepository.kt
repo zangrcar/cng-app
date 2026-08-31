@@ -6,6 +6,13 @@ import com.zangrcar.cngitaly.data.local.StationDao
 import com.zangrcar.cngitaly.data.local.StationEntity
 import com.zangrcar.cngitaly.data.mimit.MimitDownloader
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.zangrcar.cngitaly.data.routing.GeoPoint
+import com.zangrcar.cngitaly.data.routing.distancePointToRouteMeters
+import com.zangrcar.cngitaly.data.routing.expandedRouteBounds
+import com.zangrcar.cngitaly.data.routing.routeCorridorMeters
+import com.zangrcar.cngitaly.data.routing.RouteCorridorSetting
 
 class StationRepository(
     private val dao: StationDao,
@@ -26,6 +33,22 @@ class StationRepository(
             west = bounds.west
         )
         return roomStations.mapNotNull { it.toMapStation() }
+    }
+
+    suspend fun getStationsNearRoute(
+        routePoints: List<GeoPoint>,
+        routeDistanceMeters: Double,
+        corridorSetting: RouteCorridorSetting = RouteCorridorSetting.Auto
+    ): List<MapStation> = withContext(Dispatchers.Default) {
+        val corridor = routeCorridorMeters(routeDistanceMeters, corridorSetting)
+        val bounds = expandedRouteBounds(routePoints, corridor)
+        dao.getStationsInBounds(bounds.north, bounds.south, bounds.east, bounds.west)
+            .filter { station ->
+                distancePointToRouteMeters(
+                    GeoPoint(station.station.latitude, station.station.longitude), routePoints
+                ) <= corridor
+            }
+            .mapNotNull { it.toMapStation() }
     }
 
     suspend fun refresh() {

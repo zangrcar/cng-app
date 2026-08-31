@@ -103,6 +103,7 @@ class StationMapLayer(
 
     override fun onMapClick(point: LatLng): Boolean {
         val screenPoint = map.projection.toScreenLocation(point)
+        if (map.queryRenderedFeatures(screenPoint, PlaceWaypointMapLayer.TEXT_ID, PlaceWaypointMapLayer.CIRCLE_ID).isNotEmpty()) return false
         val cluster = map.queryRenderedFeatures(
             screenPoint,
             CLUSTER_CIRCLE_LAYER_ID

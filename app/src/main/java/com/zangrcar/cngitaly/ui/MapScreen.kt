@@ -70,6 +70,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -115,13 +116,9 @@ fun MapScreen(
     locationMessage: String?,
     onLocationMessageShown: () -> Unit,
     onCurrentLocationClick: () -> Unit,
-    searchAreaVisible: Boolean,
-    onSearchThisAreaClick: () -> Unit,
     onPlaceSelected: (PlaceSearchResult) -> Unit,
-    onUseRouteLocation: () -> Unit,
-    onPrefillRouteLocationIfAvailable: () -> Unit,
-    searchedPlaceAction: PlaceSearchResult?,
-    onDismissSearchedPlaceAction: () -> Unit,
+    onUseNavigateLocation: () -> Unit,
+    onCancelNavigateLocationRequest: () -> Unit,
     viewModel: MainViewModel
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -135,28 +132,27 @@ fun MapScreen(
     val isLiveDetailsLoading =
         viewModel.isLiveDetailsLoading.collectAsStateWithLifecycle().value
     val context = LocalContext.current
+    val taskSheetState = androidx.compose.material3.rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
     var showPlaceSearch by remember { mutableStateOf(false) }
-    var showRouteSheet by remember { mutableStateOf(false) }
-    var placeQuery by remember { mutableStateOf("") }
-    val placeResults = viewModel.placeResults.collectAsStateWithLifecycle().value
-    val isPlaceSearchLoading =
-        viewModel.isPlaceSearchLoading.collectAsStateWithLifecycle().value
-    val placeSearchError = viewModel.placeSearchError.collectAsStateWithLifecycle().value
-    val hasSubmittedPlaceSearch =
-        viewModel.hasSubmittedPlaceSearch.collectAsStateWithLifecycle().value
+    var showNavigate by remember { mutableStateOf(false) }
+    var showAddStop by remember { mutableStateOf(false) }
+    val normalSearch = viewModel.normalSearch.collectAsStateWithLifecycle().value
+    val quickSearch = viewModel.quickSearch.collectAsStateWithLifecycle().value
     val closePlaceSearch: () -> Unit = {
-        placeQuery = ""
         showPlaceSearch = false
         viewModel.clearPlaceSearch()
     }
     val activeRoute = viewModel.activeRoute.collectAsStateWithLifecycle().value
-    val routeDrafts = viewModel.routeDrafts.collectAsStateWithLifecycle().value
+    val searchedPlace = viewModel.searchedPlaceMarker.collectAsStateWithLifecycle().value
     val corridorSetting = viewModel.routeCorridorSetting.collectAsStateWithLifecycle().value
     val isRouteLoading = viewModel.isRouteLoading.collectAsStateWithLifecycle().value
-    val routeError = viewModel.routeError.collectAsStateWithLifecycle().value
-    val closeRouteSheet: () -> Unit = {
-        showRouteSheet = false
-        viewModel.dismissRouteSheet()
+    val closeQuickSheets: () -> Unit = {
+        if (showNavigate) onCancelNavigateLocationRequest()
+        showNavigate = false
+        showAddStop = false
+        viewModel.clearQuickSearch()
     }
 
     LaunchedEffect(locationMessage) {
@@ -168,9 +164,12 @@ fun MapScreen(
     LaunchedEffect(viewModel) {
         viewModel.messages.collect { snackbarHostState.showSnackbar(it) }
     }
+    LaunchedEffect(isRouteLoading) {
+        if (isRouteLoading && showNavigate) closeQuickSheets()
+    }
     BackHandler(
         enabled = drawerState.isOpen && selectedStation == null && !isStationDetailsLoading &&
-            !showPlaceSearch && !showRouteSheet
+            !showPlaceSearch && !showNavigate && !showAddStop
     ) {
         coroutineScope.launch { drawerState.close() }
     }
@@ -182,8 +181,16 @@ fun MapScreen(
             ModalDrawerSheet {
                 DrawerContent(
                     uiState = uiState,
+                    activeRoute = activeRoute,
+                    corridorSetting = corridorSetting,
                     onClose = { coroutineScope.launch { drawerState.close() } },
-                    onRefresh = viewModel::refresh
+                    onRefresh = viewModel::refresh,
+                    onCorridorChange = viewModel::setRouteCorridor,
+                    onApplyRoute = { endpoints ->
+                        if (viewModel.applyRouteEndpoints(endpoints)) {
+                            coroutineScope.launch { drawerState.close() }
+                        }
+                    }
                 )
             }
         }
@@ -219,7 +226,6 @@ fun MapScreen(
                     onClick = {
                         viewModel.clearSelectedStation()
                         viewModel.clearPlaceSearch()
-                        placeQuery = ""
                         showPlaceSearch = true
                     },
                     modifier = Modifier.size(48.dp),
@@ -230,17 +236,21 @@ fun MapScreen(
                 ) {
                     Icon(Icons.Default.Search, "Search place")
                 }
-                Spacer(Modifier.height(8.dp))
-                FilledIconButton(
-                    onClick = {
-                        viewModel.clearSelectedStation()
-                        showRouteSheet = true
-                    },
-                    modifier = Modifier.size(48.dp),
-                    colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
-                        containerColor = Color.Black, contentColor = Color.White
-                    )
-                ) { Icon(Icons.Default.Directions, "Route") }
+                if (activeRoute != null) {
+                    Spacer(Modifier.height(8.dp))
+                    FilledIconButton(
+                        onClick = {
+                            viewModel.clearSelectedStation()
+                            viewModel.clearQuickSearch()
+                            showAddStop = true
+                        },
+                        modifier = Modifier.size(48.dp),
+                        colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
+                            containerColor = Color.Black,
+                            contentColor = Color.White
+                        )
+                    ) { Icon(Icons.Default.Add, "Add stop") }
+                }
             }
             if (activeRoute != null) {
                 RouteSummary(
@@ -248,16 +258,6 @@ fun MapScreen(
                     onClear = viewModel::clearRoute,
                     modifier = Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 8.dp)
                 )
-            } else if (searchAreaVisible) {
-                Button(
-                    onClick = onSearchThisAreaClick,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .statusBarsPadding()
-                        .padding(top = 8.dp)
-                ) {
-                    Text("Search this area")
-                }
             }
             if (isRouteLoading) {
                 Surface(Modifier.align(Alignment.Center), shape = MaterialTheme.shapes.extraLarge, tonalElevation = 6.dp) {
@@ -275,6 +275,20 @@ fun MapScreen(
                     .padding(16.dp)
             ) {
                 Icon(Icons.Default.MyLocation, "Current location")
+            }
+            if (searchedPlace != null) {
+                androidx.compose.material3.ExtendedFloatingActionButton(
+                    onClick = {
+                        viewModel.clearQuickSearch()
+                        showNavigate = true
+                    },
+                    icon = { Icon(Icons.Default.Directions, null) },
+                    text = { Text("Navigate") },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(16.dp)
+                )
             }
             SnackbarHost(
                 hostState = snackbarHostState,
@@ -308,18 +322,17 @@ fun MapScreen(
     if (showPlaceSearch) {
         ModalBottomSheet(
             onDismissRequest = closePlaceSearch,
+            sheetState = taskSheetState,
             properties = ModalBottomSheetProperties(
                 shouldDismissOnBackPress = false
             )
         ) {
-            PlaceSearchContent(
-                query = placeQuery,
-                onQueryChange = { placeQuery = it },
-                onSearch = { viewModel.searchPlaces(placeQuery) },
-                results = placeResults,
-                isLoading = isPlaceSearchLoading,
-                error = placeSearchError,
-                hasSubmitted = hasSubmittedPlaceSearch,
+            PlaceTaskSheet(
+                title = "Search place",
+                state = normalSearch,
+                placeholder = "Search Italian place or address",
+                onQueryChange = viewModel::updateNormalSearch,
+                onSubmit = viewModel::submitNormalSearch,
                 onDismiss = closePlaceSearch,
                 onResultSelected = { result ->
                     closePlaceSearch()
@@ -328,39 +341,42 @@ fun MapScreen(
             )
         }
     }
-    if (showRouteSheet) {
+    if (showNavigate && searchedPlace != null) {
         ModalBottomSheet(
-            onDismissRequest = closeRouteSheet,
+            onDismissRequest = closeQuickSheets,
+            sheetState = taskSheetState,
             properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
         ) {
-            RouteSheetContent(
-                drafts = routeDrafts,
-                onEdit = viewModel::editRoutePoint,
-                onSearch = viewModel::searchRouteEndpoint,
-                onResultSelected = viewModel::selectRouteEndpoint,
-                onUseLocation = onUseRouteLocation,
-                onAddStop = viewModel::addRouteStop,
-                onRemoveStop = viewModel::removeRouteStop,
-                onMoveStop = viewModel::moveRouteStop,
-                corridorSetting = corridorSetting,
-                onCorridorChange = viewModel::setRouteCorridor,
-                onFindRoute = { if (viewModel.findRoute()) { showRouteSheet = false; viewModel.dismissRouteSheet() } },
-                onDismiss = closeRouteSheet
+            NavigateSheet(
+                destination = searchedPlace,
+                state = quickSearch,
+                onQueryChange = viewModel::updateQuickSearch,
+                onSubmit = viewModel::submitQuickSearch,
+                onUseLocation = onUseNavigateLocation,
+                onResultSelected = { result ->
+                    if (viewModel.navigateFromPlace(result)) closeQuickSheets()
+                },
+                onDismiss = closeQuickSheets
             )
         }
     }
-    if (searchedPlaceAction != null) {
-        ModalBottomSheet(onDismissRequest = onDismissSearchedPlaceAction) {
-            Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(24.dp)) {
-                Text(searchedPlaceAction.displayName, style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(16.dp))
-                Button(onClick = {
-                    viewModel.routeToSearchedPlace(); onPrefillRouteLocationIfAvailable(); onDismissSearchedPlaceAction(); showRouteSheet = true
-                }, Modifier.fillMaxWidth()) { Text("Route here") }
-                OutlinedButton(onClick = {
-                    viewModel.setSearchedPlaceMarker(null); onDismissSearchedPlaceAction()
-                }, Modifier.fillMaxWidth()) { Text("Remove marker") }
-            }
+    if (showAddStop && activeRoute != null) {
+        ModalBottomSheet(
+            onDismissRequest = closeQuickSheets,
+            sheetState = taskSheetState,
+            properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
+        ) {
+            PlaceTaskSheet(
+                title = "Add stop",
+                state = quickSearch,
+                placeholder = "Search place",
+                onQueryChange = viewModel::updateQuickSearch,
+                onSubmit = viewModel::submitQuickSearch,
+                onDismiss = closeQuickSheets,
+                onResultSelected = { result ->
+                    if (viewModel.addStopAndRecalculate(result)) closeQuickSheets()
+                }
+            )
         }
     }
 }
@@ -370,8 +386,11 @@ private fun RouteSummary(route: RouteResult, onClear: () -> Unit, modifier: Modi
     val kilometers = (route.distanceMeters / 1000.0).toInt()
     val totalMinutes = (route.durationSeconds / 60.0).toInt()
     Surface(modifier = modifier, shape = MaterialTheme.shapes.extraLarge, tonalElevation = 4.dp) {
-        Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("$kilometers km · ${totalMinutes / 60} h ${totalMinutes % 60} min")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "$kilometers km · ${totalMinutes / 60} h ${totalMinutes % 60} min",
+                Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp)
+            )
             Spacer(Modifier.size(8.dp))
             IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Default.Close, "Clear route")
@@ -381,169 +400,132 @@ private fun RouteSummary(route: RouteResult, onClear: () -> Unit, modifier: Modi
 }
 
 @Composable
-private fun RouteSheetContent(
-    drafts: List<RoutePointDraft>,
-    onEdit: (com.zangrcar.cngitaly.data.routing.RoutePointId, String) -> Unit,
-    onSearch: (com.zangrcar.cngitaly.data.routing.RoutePointId) -> Unit,
-    onResultSelected: (com.zangrcar.cngitaly.data.routing.RoutePointId, PlaceSearchResult) -> Unit,
-    onUseLocation: () -> Unit, onAddStop: () -> Unit,
-    onRemoveStop: (com.zangrcar.cngitaly.data.routing.RoutePointId) -> Unit,
-    onMoveStop: (com.zangrcar.cngitaly.data.routing.RoutePointId, Int) -> Unit,
-    corridorSetting: RouteCorridorSetting, onCorridorChange: (RouteCorridorSetting) -> Unit,
-    onFindRoute: () -> Unit, onDismiss: () -> Unit
-) {
-    val focusManager = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
-    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    var corridorExpanded by remember { mutableStateOf(false) }
-    BackHandler(enabled = !imeVisible) { onDismiss() }
-    Column(Modifier.fillMaxWidth().heightIn(max = 680.dp).navigationBarsPadding()
-        .padding(horizontal = 24.dp, vertical = 8.dp)) {
-        Text("Route", style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(16.dp))
-        drafts.forEachIndexed { index, draft ->
-            val label = when (draft.role) { RoutePointRole.FROM -> "FROM"; RoutePointRole.TO -> "TO"; RoutePointRole.STOP -> "STOP ${drafts.take(index + 1).count { it.role == RoutePointRole.STOP }}" }
-            Text(label, style = MaterialTheme.typography.labelMedium)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(value = draft.query, onValueChange = { onEdit(draft.id, it) }, modifier = Modifier.weight(1f), singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { if (draft.query.isNotBlank()) { focusManager.clearFocus(); keyboard?.hide(); onSearch(draft.id) } }))
-                if (draft.role == RoutePointRole.STOP) {
-                    IconButton(onClick = { onMoveStop(draft.id, -1) }) { Icon(Icons.Default.KeyboardArrowUp, "Move stop up") }
-                    IconButton(onClick = { onMoveStop(draft.id, 1) }) { Icon(Icons.Default.KeyboardArrowDown, "Move stop down") }
-                    IconButton(onClick = { onRemoveStop(draft.id) }) { Icon(Icons.Default.Delete, "Remove stop") }
-                }
-            }
-            if (draft.role == RoutePointRole.FROM) Text("Use my location", Modifier.clickable(onClick = onUseLocation).padding(vertical = 8.dp), color = MaterialTheme.colorScheme.primary)
-            if (draft.isSearching) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            draft.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            draft.results.forEach { result -> Text(result.displayName, Modifier.fillMaxWidth().clickable {
-                focusManager.clearFocus(); keyboard?.hide(); onResultSelected(draft.id, result)
-            }.padding(vertical = 10.dp), maxLines = 2, overflow = TextOverflow.Ellipsis) }
-            if (draft.role == RoutePointRole.STOP || draft.role == RoutePointRole.FROM) Spacer(Modifier.height(10.dp))
-            if (draft.role == RoutePointRole.FROM) OutlinedButton(onClick = onAddStop) { Icon(Icons.Default.Add, null); Text("Add stop") }
-        }
-        Spacer(Modifier.height(12.dp)); Text("Show stations within", style = MaterialTheme.typography.labelMedium)
-        Box {
-            OutlinedButton(onClick = { corridorExpanded = true }) { Text(corridorLabel(corridorSetting)); Text(" ▾") }
-            DropdownMenu(expanded = corridorExpanded, onDismissRequest = { corridorExpanded = false }) {
-                listOf(RouteCorridorSetting.Auto, RouteCorridorSetting.Fixed(3000.0), RouteCorridorSetting.Fixed(5000.0), RouteCorridorSetting.Fixed(10000.0), RouteCorridorSetting.Fixed(20000.0)).forEach { option ->
-                    DropdownMenuItem(text = { Text(corridorLabel(option)) }, onClick = { onCorridorChange(option); corridorExpanded = false })
-                }
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = { focusManager.clearFocus(); keyboard?.hide(); onFindRoute() },
-            enabled = drafts.all { it.selectedEndpoint != null },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Find route")
-        }
-        Spacer(Modifier.height(16.dp))
-        Text("Search data © OpenStreetMap contributors · Geocoding: Photon", style = MaterialTheme.typography.bodySmall)
-        Spacer(Modifier.height(16.dp))
-    }
-}
-
-private fun corridorLabel(setting: RouteCorridorSetting) = when (setting) {
-    RouteCorridorSetting.Auto -> "Auto"
-    is RouteCorridorSetting.Fixed -> "${(setting.meters / 1000).toInt()} km"
-}
-
-@Composable
-private fun PlaceSearchContent(
-    query: String,
+private fun PlaceTaskSheet(
+    title: String,
+    state: com.zangrcar.cngitaly.PlaceTypeaheadState,
+    placeholder: String,
     onQueryChange: (String) -> Unit,
-    onSearch: () -> Unit,
-    results: List<PlaceSearchResult>,
-    isLoading: Boolean,
-    error: String?,
-    hasSubmitted: Boolean,
+    onSubmit: () -> Unit,
     onDismiss: () -> Unit,
     onResultSelected: (PlaceSearchResult) -> Unit
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    val submitSearch = {
-        focusManager.clearFocus()
-        keyboardController?.hide()
-        onSearch()
-    }
-    BackHandler(enabled = !imeVisible) {
-        onDismiss()
-    }
+    BackHandler(enabled = !imeVisible) { onDismiss() }
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = 640.dp)
+            .heightIn(max = 720.dp)
             .navigationBarsPadding()
             .padding(horizontal = 24.dp, vertical = 8.dp)
     ) {
-        Text("Search place", style = MaterialTheme.typography.headlineSmall)
+        Text(title, style = MaterialTheme.typography.headlineSmall)
         Spacer(Modifier.height(16.dp))
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            label = { Text("Italian place or address") },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(
-                onSearch = { if (query.isNotBlank()) submitSearch() }
-            )
-        )
-        Spacer(Modifier.height(12.dp))
-        Button(
-            onClick = submitSearch,
-            enabled = query.isNotBlank() && !isLoading,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            if (isLoading) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.size(8.dp))
+        PlaceTypeahead(
+            state = state,
+            placeholder = placeholder,
+            onQueryChange = onQueryChange,
+            onSubmit = onSubmit,
+            onResultSelected = {
+                focusManager.clearFocus(); keyboardController?.hide(); onResultSelected(it)
             }
-            Text("Search")
-        }
-        Spacer(Modifier.height(12.dp))
-        error?.let {
-            Text(it, color = MaterialTheme.colorScheme.error)
-            Spacer(Modifier.height(8.dp))
-        }
-        if (!isLoading && error == null && hasSubmitted && results.isEmpty()) {
-            Text("No places found.")
-            Spacer(Modifier.height(8.dp))
-        }
-        results.take(5).forEach { result ->
-            Text(
-                text = result.displayName,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        focusManager.clearFocus()
-                        keyboardController?.hide()
-                        onResultSelected(result)
-                    }
-                    .padding(vertical = 14.dp),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyLarge
-            )
-        }
-        Spacer(Modifier.height(16.dp))
-        Text(
-            "Search data © OpenStreetMap contributors",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Text(
-            "Geocoding: Photon",
+        Spacer(Modifier.height(16.dp))
+        Text("Search data © OpenStreetMap contributors · Geocoding: Photon",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(16.dp))
     }
+}
+
+@Composable
+private fun NavigateSheet(
+    destination: PlaceSearchResult,
+    state: com.zangrcar.cngitaly.PlaceTypeaheadState,
+    onQueryChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onUseLocation: () -> Unit,
+    onResultSelected: (PlaceSearchResult) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    BackHandler(enabled = !imeVisible) { onDismiss() }
+    Column(Modifier.fillMaxWidth().heightIn(max = 720.dp).navigationBarsPadding()
+        .padding(horizontal = 24.dp, vertical = 8.dp)) {
+        Text("Navigate", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(12.dp))
+        Text("TO", style = MaterialTheme.typography.labelMedium)
+        Text(destination.displayName, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.height(16.dp))
+        Text("FROM", style = MaterialTheme.typography.labelMedium)
+        PlaceTypeahead(
+            state = state,
+            placeholder = "Search starting place",
+            onQueryChange = onQueryChange,
+            onSubmit = onSubmit,
+            onResultSelected = {
+                focusManager.clearFocus(); keyboard?.hide(); onResultSelected(it)
+            }
+        )
+        OutlinedButton(onClick = {
+            focusManager.clearFocus(); keyboard?.hide(); onUseLocation()
+        }, Modifier.fillMaxWidth()) { Icon(Icons.Default.MyLocation, null); Text("Use my location") }
+        Spacer(Modifier.height(16.dp))
+        Text("Search data © OpenStreetMap contributors · Geocoding: Photon",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun PlaceTypeahead(
+    state: com.zangrcar.cngitaly.PlaceTypeaheadState,
+    placeholder: String,
+    onQueryChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onResultSelected: (PlaceSearchResult) -> Unit
+) {
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(250)
+        focusRequester.requestFocus()
+        keyboard?.show()
+    }
+    OutlinedTextField(
+        value = state.query,
+        onValueChange = onQueryChange,
+        modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
+        singleLine = true,
+        placeholder = { Text(placeholder) },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = {
+            if (com.zangrcar.cngitaly.shouldSearchPlaceQuery(state.query)) {
+                onSubmit(); keyboard?.hide()
+            }
+        })
+    )
+    if (state.isLoading) {
+        Spacer(Modifier.height(8.dp)); CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+    }
+    state.error?.let { Spacer(Modifier.height(8.dp)); Text(it, color = MaterialTheme.colorScheme.error) }
+    Column(Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+        state.results.take(5).forEach { result ->
+            Text(result.displayName, Modifier.fillMaxWidth().clickable { onResultSelected(result) }
+                .padding(vertical = 14.dp), maxLines = 2, overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge)
+        }
+    }
+}
+
+private fun corridorLabel(setting: RouteCorridorSetting) = when (setting) {
+    RouteCorridorSetting.Auto -> "Auto"
+    is RouteCorridorSetting.Fixed -> "${(setting.meters / 1000).toInt()} km"
 }
 
 @Composable
@@ -779,11 +761,18 @@ private fun openInGoogleMaps(context: Context, station: StationDetails): Boolean
 @Composable
 private fun DrawerContent(
     uiState: MainUiState,
+    activeRoute: RouteResult?,
+    corridorSetting: RouteCorridorSetting,
     onClose: () -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onCorridorChange: (RouteCorridorSetting) -> Unit,
+    onApplyRoute: (List<RouteEndpoint>) -> Unit
 ) {
     val meta = uiState.metadata
-    Column(modifier = Modifier.padding(24.dp)) {
+    var routeDraft by remember(activeRoute?.endpoints) {
+        mutableStateOf(activeRoute?.endpoints.orEmpty())
+    }
+    Column(modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -795,6 +784,20 @@ private fun DrawerContent(
             }
         }
         Spacer(Modifier.height(24.dp))
+        if (activeRoute != null) {
+            Text("ROUTE", style = MaterialTheme.typography.labelMedium)
+            Spacer(Modifier.height(12.dp))
+            RouteDrawerEditor(
+                endpoints = routeDraft,
+                originalEndpoints = activeRoute.endpoints,
+                corridorSetting = corridorSetting,
+                onEndpointsChange = { routeDraft = it },
+                onCorridorChange = onCorridorChange,
+                onApply = { onApplyRoute(routeDraft) },
+                onDone = onClose
+            )
+            Spacer(Modifier.height(24.dp))
+        }
         Text("DATA", style = MaterialTheme.typography.labelMedium)
         Spacer(Modifier.height(12.dp))
         Text("Station data", style = MaterialTheme.typography.titleMedium)
@@ -819,6 +822,65 @@ private fun DrawerContent(
             }
         }
     }
+}
+
+@Composable
+private fun RouteDrawerEditor(
+    endpoints: List<RouteEndpoint>,
+    originalEndpoints: List<RouteEndpoint>,
+    corridorSetting: RouteCorridorSetting,
+    onEndpointsChange: (List<RouteEndpoint>) -> Unit,
+    onCorridorChange: (RouteCorridorSetting) -> Unit,
+    onApply: () -> Unit,
+    onDone: () -> Unit
+) {
+    var corridorExpanded by remember { mutableStateOf(false) }
+    endpoints.forEachIndexed { index, endpoint ->
+        val label = when (index) {
+            0 -> "From"
+            endpoints.lastIndex -> "To"
+            else -> index.toString()
+        }
+        Text(label, style = MaterialTheme.typography.labelMedium)
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(endpoint.label, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (index in 1 until endpoints.lastIndex) {
+                IconButton(onClick = {
+                    onEndpointsChange(com.zangrcar.cngitaly.data.routing.QuickRouteActions.moveStop(endpoints, index, -1))
+                }) { Icon(Icons.Default.KeyboardArrowUp, "Move stop up") }
+                IconButton(onClick = {
+                    onEndpointsChange(com.zangrcar.cngitaly.data.routing.QuickRouteActions.moveStop(endpoints, index, 1))
+                }) { Icon(Icons.Default.KeyboardArrowDown, "Move stop down") }
+                IconButton(onClick = {
+                    onEndpointsChange(com.zangrcar.cngitaly.data.routing.QuickRouteActions.removeStop(endpoints, index))
+                }) { Icon(Icons.Default.Delete, "Remove stop") }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+    Text("Show stations within", style = MaterialTheme.typography.labelMedium)
+    Box {
+        OutlinedButton(onClick = { corridorExpanded = true }) { Text(corridorLabel(corridorSetting)); Text(" ▾") }
+        DropdownMenu(expanded = corridorExpanded, onDismissRequest = { corridorExpanded = false }) {
+            listOf(
+                RouteCorridorSetting.Auto,
+                RouteCorridorSetting.Fixed(3000.0),
+                RouteCorridorSetting.Fixed(5000.0),
+                RouteCorridorSetting.Fixed(10000.0),
+                RouteCorridorSetting.Fixed(20000.0)
+            ).forEach { option ->
+                DropdownMenuItem(text = { Text(corridorLabel(option)) }, onClick = {
+                    onCorridorChange(option); corridorExpanded = false
+                })
+            }
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+    val action = com.zangrcar.cngitaly.data.routing.routeDrawerAction(originalEndpoints, endpoints)
+    Button(
+        onClick = if (action == com.zangrcar.cngitaly.data.routing.RouteDrawerAction.DONE) onDone else onApply,
+        modifier = Modifier.fillMaxWidth()
+    ) { Text(if (action == com.zangrcar.cngitaly.data.routing.RouteDrawerAction.DONE) "Done" else "Apply changes") }
 }
 
 @Composable

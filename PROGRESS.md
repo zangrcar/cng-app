@@ -43,9 +43,8 @@ Phase 5 is complete and physically verified.
 
 Phase 6 Photon place search is complete and physically verified.
 
-Phase 7A core A -> B route mode is implemented and build-verified. Physical-device verification is pending.
-
-The current task is Phase 7 physical-device verification after Phase 7B implementation.
+Phase 7 routing and the fast search/navigation UX simplification are implemented
+and build-verified. Phase 7 remains pending physical-device verification.
 
 Implemented:
 - MapLibre Native Android 13.3.1 using the explicit OpenGL `android-sdk-opengl` artifact
@@ -294,6 +293,36 @@ Phase 7B route UX and waypoint support (2026-08-31):
 - focused tests cover OSRM two/multi-point order, automatic/fixed corridors, per-field draft assignment, stop removal/reordering, and place-marker actions
 - `.\gradlew.bat test`: PASS
 - `.\gradlew.bat assembleDebug`: PASS
+- physical-device verification: pending
+
+Phase 7C final route-flow consolidation (2026-09-01):
+- removed the dedicated top-left route control; the controls are again menu, data status, and place search
+- standalone Photon selection now centers at zoom 10.5, creates/replaces the temporary marker, immediately opens its action sheet, and never clears an active route or queries Room by viewport
+- marker actions are Navigate to, Add as stop, and Remove marker; Navigate to sets/replaces To while preserving a sensible From and ordered stops, and Add as stop inserts immediately before To or creates a stop-first draft
+- usable current location prefills an empty From as My location, while explicit Use my location still replaces From; neither marker action calls OSRM
+- the active route summary body opens the route editor and its separate X clears the route
+- GPS recenter and route-waypoint taps are camera-only zoom-10.5 actions and preserve route/filter state
+- removed Search this area, viewport-dirty tracking, last-searched-bounds state, camera-idle dirty listeners, and automatic viewport queries after GPS/place selection
+- normal mode loads every local station with its CNG prices into the clustered source at existing-data startup, successful normal refresh, and route clear; active-route refresh and corridor changes retain exact local route filtering
+- retained Room bounds querying exclusively as the route-corridor candidate prefilter and retained exact point-to-route filtering
+- expanded focused route-draft tests for destination replacement, origin/stop preservation, stop insertion, empty-destination drafts, and My location preservation; existing coordinate-order and corridor tests remain
+- `\.\gradlew.bat test`: PASS
+- `\.\gradlew.bat assembleDebug`: PASS
+- physical-device verification: pending
+
+Phase 7 fast search/navigation UX simplification (2026-09-01):
+- all normal and quick place inputs autofocus and open the keyboard after entering composition, using shared Compose typeahead UI rather than Activity/window focus hacks
+- Photon typeahead starts at two normalized characters, debounces 375 ms, cancels pending work, clears old suggestions immediately, rejects stale responses, preserves ranking/throttling/session caching, and supports immediate keyboard Search
+- normal suggestion selection closes search, centers at zoom 10.5, creates/replaces one temporary marker, and shows a compact floating Navigate action without opening another sheet
+- Navigate opens a minimal destination-context + From sheet; selecting a global Photon result or usable My location immediately closes it and requests the two-point OSRM route with no Find route confirmation
+- a route-active Add Stop map control opens a minimal global Photon sheet; selection inserts immediately before To, preserves prior stop order, and triggers one recalculation
+- active-route ordering/removal moved to the hamburger drawer Route section; changes remain local until Apply changes, while unchanged order uses Done
+- the Auto/3/5/10/20 km corridor selector moved to the drawer and continues to apply immediately through local Room filtering without OSRM
+- route replacement failures preserve the previous active route and temporary searched destination for retry; the compact calculating overlay and Snackbar behavior remain
+- retained all-stations normal mode, route-only corridor stations, camera-only locator/waypoint actions, ordered A/number/B markers, and the exact Noto Sans waypoint font fix
+- added focused tests for typeahead threshold/stale-query behavior, normalized Photon cache reuse, quick Navigate endpoint creation, ordered single/multiple stop insertion, drawer reorder/removal, and Apply-vs-Done state
+- `\.\gradlew.bat test`: PASS
+- `\.\gradlew.bat assembleDebug`: PASS
 - physical-device verification: pending
 
 ## Important discoveries

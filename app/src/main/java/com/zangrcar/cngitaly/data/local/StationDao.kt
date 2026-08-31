@@ -22,6 +22,10 @@ interface StationDao {
     suspend fun getStationWithPrices(stationId: Int): StationWithPrices?
 
     @Transaction
+    @Query("SELECT * FROM stations")
+    suspend fun getAllStationsWithPrices(): List<StationWithPrices>
+
+    @Transaction
     @Query(
         """
         SELECT * FROM stations

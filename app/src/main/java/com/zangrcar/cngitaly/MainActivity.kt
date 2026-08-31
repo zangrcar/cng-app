@@ -11,14 +11,12 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import com.zangrcar.cngitaly.data.MapBounds
 import com.zangrcar.cngitaly.data.geocoding.PlaceSearchResult
 import com.zangrcar.cngitaly.ui.MapScreen
 import com.zangrcar.cngitaly.ui.map.StationMapLayer
@@ -50,13 +48,10 @@ class MainActivity : ComponentActivity() {
     private var centerWhenLocationArrives = false
     private var requestingCenterLocation = false
     private var locationMessage by mutableStateOf<String?>(null)
-    private var searchAreaVisible by mutableStateOf(false)
-    private var userGestureMovement = false
     private var stationMapLayer: StationMapLayer? = null
     private var routeMapLayer: RouteMapLayer? = null
     private var placeWaypointMapLayer: PlaceWaypointMapLayer? = null
     private var routeLocationRequest = false
-    private var searchedPlaceAction by mutableStateOf<PlaceSearchResult?>(null)
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -65,7 +60,7 @@ class MainActivity : ComponentActivity() {
             enableLocationAndCenter(showWaiting = true, forceCenter = true)
         } else if (routeLocationRequest) {
             routeLocationRequest = false
-            mainViewModel.setCurrentLocationError("Location permission is required.")
+            mainViewModel.setQuickSearchError("Location permission is required.")
         } else locationMessage = "Location permission is needed to show your current position."
     }
 
@@ -78,7 +73,8 @@ class MainActivity : ComponentActivity() {
                 map?.locationComponent?.forceLocationUpdate(location)
                 if (routeLocationRequest) {
                     routeLocationRequest = false
-                    mainViewModel.useCurrentLocation(RouteEndpoint("My location", location.latitude, location.longitude, true))
+                    centerWhenLocationArrives = false
+                    mainViewModel.navigateFrom(RouteEndpoint("My location", location.latitude, location.longitude, true))
                 } else if (centerWhenLocationArrives) centerMapOn(location)
             } else {
                 requestLocationUpdate()
@@ -89,7 +85,7 @@ class MainActivity : ComponentActivity() {
             requestingCenterLocation = false
             if (routeLocationRequest) {
                 routeLocationRequest = false
-                mainViewModel.setCurrentLocationError("Current location unavailable.")
+                mainViewModel.setQuickSearchError("Current location unavailable.")
             } else locationMessage = "Waiting for location…"
         }
     }
@@ -102,17 +98,6 @@ class MainActivity : ComponentActivity() {
         mapView.onCreate(savedInstanceState)
         mapView.getMapAsync { map ->
             this.map = map
-            map.addOnCameraMoveStartedListener { reason ->
-                if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) {
-                    userGestureMovement = true
-                }
-            }
-            map.addOnCameraIdleListener {
-                if (userGestureMovement) {
-                    userGestureMovement = false
-                    if (mainViewModel.activeRoute.value == null) searchAreaVisible = true
-                }
-            }
             map.setStyle("https://tiles.openfreemap.org/styles/liberty") { style ->
                 loadedStyle = style
                 stationMapLayer?.destroy()
@@ -125,25 +110,20 @@ class MainActivity : ComponentActivity() {
                     onStationSelected = mainViewModel::selectStation
                 ).also {
                     val stations = mainViewModel.stations.value
-                    if (!it.update(stations) && stations.isNotEmpty()) searchAreaVisible = true
+                    it.update(stations)
                 }
                 placeWaypointMapLayer?.destroy()
                 placeWaypointMapLayer = PlaceWaypointMapLayer(map, style,
                     onWaypointClick = { endpoint ->
-                        userGestureMovement = false
                         map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(endpoint.latitude, endpoint.longitude), 10.5), 700)
                     },
-                    onPlaceClick = { searchedPlaceAction = it }
+                    onPlaceClick = { }
                 ).also { layer ->
                     layer.updateWaypoints(mainViewModel.activeRoute.value?.endpoints.orEmpty())
                     layer.updatePlace(mainViewModel.searchedPlaceMarker.value)
                 }
                 if (hasForegroundLocationPermission()) {
-                    val willCenterOnLocation = !hasCenteredOnLocation
                     enableLocationAndCenter(showWaiting = false)
-                    if (!willCenterOnLocation) mapView.post { searchCurrentViewport(false) }
-                } else {
-                    mapView.post { searchCurrentViewport(false) }
                 }
             }
             map.uiSettings.isLogoEnabled = true
@@ -168,9 +148,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             mainViewModel.stations.collect { stations ->
                 val layer = stationMapLayer
-                if (layer != null && !layer.update(stations) && stations.isNotEmpty()) {
-                    searchAreaVisible = true
-                }
+                layer?.update(stations)
             }
         }
         lifecycleScope.launch {
@@ -178,17 +156,11 @@ class MainActivity : ComponentActivity() {
                 placeWaypointMapLayer?.updateWaypoints(route?.endpoints.orEmpty())
                 if (route == null) routeMapLayer?.clear() else {
                     routeMapLayer?.update(route.points)
-                    searchAreaVisible = false
                     fitRoute(route.points)
                 }
             }
         }
         lifecycleScope.launch { mainViewModel.searchedPlaceMarker.collect { placeWaypointMapLayer?.updatePlace(it) } }
-        lifecycleScope.launch {
-            mainViewModel.viewportSearchRequests.collect {
-                mapView.post { searchCurrentViewport(false) }
-            }
-        }
         enableEdgeToEdge()
         setContent {
             CNGItalyTheme {
@@ -197,16 +169,11 @@ class MainActivity : ComponentActivity() {
                     locationMessage = locationMessage,
                     onLocationMessageShown = { locationMessage = null },
                     onCurrentLocationClick = {
-                        if (mainViewModel.activeRoute.value != null) mainViewModel.clearRoute()
                         onCurrentLocationClick()
                     },
-                    searchAreaVisible = searchAreaVisible && mainViewModel.activeRoute.collectAsStateWithLifecycle().value == null,
-                    onSearchThisAreaClick = { searchCurrentViewport(true) },
                     onPlaceSelected = ::centerMapOnPlace,
-                    onUseRouteLocation = ::useCurrentLocationForRoute,
-                    onPrefillRouteLocationIfAvailable = ::prefillCurrentLocationIfAvailable,
-                    searchedPlaceAction = searchedPlaceAction,
-                    onDismissSearchedPlaceAction = { searchedPlaceAction = null },
+                    onUseNavigateLocation = ::useCurrentLocationForRoute,
+                    onCancelNavigateLocationRequest = ::cancelRouteLocationRequest,
                     viewModel = mainViewModel
                 )
             }
@@ -307,7 +274,6 @@ class MainActivity : ComponentActivity() {
         centerWhenLocationArrives = false
         hasCenteredOnLocation = true
         val map = map ?: return
-        searchAreaVisible = false
         if (map.locationComponent.isLocationComponentActivated) {
             map.locationComponent.cameraMode = CameraMode.NONE
         }
@@ -316,33 +282,20 @@ class MainActivity : ComponentActivity() {
                 LatLng(location.latitude, location.longitude),
                 10.5
             ),
-            700,
-            object : MapLibreMap.CancelableCallback {
-                override fun onFinish() {
-                    searchCurrentViewport(false)
-                }
-
-                override fun onCancel() = Unit
-            }
+            700
         )
     }
 
     private fun centerMapOnPlace(place: PlaceSearchResult) {
         val map = map ?: return
-        if (mainViewModel.activeRoute.value != null) mainViewModel.clearRoute()
         mainViewModel.setSearchedPlaceMarker(place)
-        searchAreaVisible = false
         map.locationComponent.cameraMode = CameraMode.NONE
         map.animateCamera(
             CameraUpdateFactory.newLatLngZoom(
                 LatLng(place.latitude, place.longitude),
                 10.5
             ),
-            700,
-            object : MapLibreMap.CancelableCallback {
-                override fun onFinish() = searchCurrentViewport(false)
-                override fun onCancel() = Unit
-            }
+            700
         )
     }
 
@@ -354,40 +307,20 @@ class MainActivity : ComponentActivity() {
         }
         val location = map?.locationComponent?.lastKnownLocation
         if (location != null) {
-            mainViewModel.useCurrentLocation(RouteEndpoint("My location", location.latitude, location.longitude, true))
+            mainViewModel.navigateFrom(RouteEndpoint("My location", location.latitude, location.longitude, true))
         } else {
             routeLocationRequest = true
-            mainViewModel.setCurrentLocationError("Current location unavailable.")
-            enableLocationAndCenter(showWaiting = false)
+            mainViewModel.setQuickSearchError("Current location unavailable.")
+            enableLocationAndCenter(showWaiting = false, forceCenter = true)
         }
     }
 
-    private fun prefillCurrentLocationIfAvailable() {
-        if (!hasForegroundLocationPermission()) return
-        map?.locationComponent?.lastKnownLocation?.let { location ->
-            mainViewModel.useCurrentLocation(RouteEndpoint("My location", location.latitude, location.longitude, true))
-        }
-    }
-
-    private fun searchCurrentViewport(userInitiated: Boolean) {
-        if (mainViewModel.activeRoute.value != null) return
-        val map = map ?: return
-        if (loadedStyle == null) return
-        if (mapView.width == 0 || mapView.height == 0) {
-            mapView.post { searchCurrentViewport(userInitiated) }
-            return
-        }
-        val bounds = map.projection.visibleRegion.latLngBounds
-        mainViewModel.searchStations(
-            MapBounds(
-                north = bounds.latitudeNorth,
-                south = bounds.latitudeSouth,
-                east = bounds.longitudeEast,
-                west = bounds.longitudeWest
-            ),
-            userInitiated = userInitiated
-        )
-        searchAreaVisible = false
+    private fun cancelRouteLocationRequest() {
+        if (!routeLocationRequest) return
+        routeLocationRequest = false
+        requestingCenterLocation = false
+        centerWhenLocationArrives = false
+        map?.locationComponent?.locationEngine?.removeLocationUpdates(centerLocationCallback)
     }
 
     private fun fitRoute(points: List<com.zangrcar.cngitaly.data.routing.GeoPoint>) {

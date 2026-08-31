@@ -20,20 +20,11 @@ class StationRepository(
 ) {
     val metadata: Flow<DatasetMetaEntity?> = dao.observeMeta()
 
-    suspend fun hasLocalData(): Boolean = dao.getMeta() != null
-
     suspend fun getStationDetails(stationId: Int): StationDetails? =
         dao.getStationWithPrices(stationId)?.toStationDetails()
 
-    suspend fun getStationsInBounds(bounds: MapBounds): List<MapStation> {
-        val roomStations = dao.getStationsInBounds(
-            north = bounds.north,
-            south = bounds.south,
-            east = bounds.east,
-            west = bounds.west
-        )
-        return roomStations.mapNotNull { it.toMapStation() }
-    }
+    suspend fun getAllStations(): List<MapStation> =
+        dao.getAllStationsWithPrices().mapNotNull { it.toMapStation() }
 
     suspend fun getStationsNearRoute(
         routePoints: List<GeoPoint>,

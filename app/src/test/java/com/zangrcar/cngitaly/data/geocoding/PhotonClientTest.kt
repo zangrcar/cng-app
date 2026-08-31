@@ -3,6 +3,12 @@ package com.zangrcar.cngitaly.data.geocoding
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlinx.coroutines.runBlocking
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 
 class PhotonClientTest {
     @Test fun `valid feature parses longitude latitude order`() {
@@ -60,6 +66,24 @@ class PhotonClientTest {
         val query = normalizePlaceQuery("Rome")
         assertEquals("rome|IT", photonCacheKey(query, listOf("IT")))
         assertEquals("rome|", photonCacheKey(query, emptyList()))
+    }
+
+    @Test fun `normalized cached query avoids duplicate HTTP request`() = runBlocking {
+        var requests = 0
+        val http = OkHttpClient.Builder().addInterceptor { chain ->
+            requests++
+            Response.Builder()
+                .request(chain.request())
+                .protocol(Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(photon(feature("Rome", 12.5, 41.9)).toResponseBody("application/json".toMediaType()))
+                .build()
+        }.build()
+        val client = PhotonClient(http)
+        client.search("Rome")
+        client.search("  ROME ")
+        assertEquals(1, requests)
     }
 
     @Test fun `standalone URL is Italy only`() {

@@ -29,7 +29,6 @@ Eventually the main map contains:
 - place search UI;
 - MapLibre compass in top-right;
 - current-location/recenter button;
-- Search this area button when map has moved from the last searched bounds;
 - CNG station markers/clusters;
 - route when route mode is active.
 
@@ -73,23 +72,13 @@ Tapping the indicator should explain the current state.
 
 Default mode.
 
-If GPS permission/location is available:
-- center map on current location;
-- initial camera should show approximately 30 km around the point.
+Normal mode loads all locally stored Italian CNG stations into one clustered
+MapLibre GeoJSON source. The current dataset is only about 1,600 stations, so
+MapLibre handles viewport rendering and clustering without Room queries or
+GeoJSON rebuilds on pan and zoom. There is no Search this area control.
 
-If a manually selected place is used:
-- center there using approximately the same initial scale.
-
-There is NO user-configurable search radius.
-
-The visible map viewport defines the search area.
-
-Stations shown after a search are those relevant to the visible bounds.
-
-After the user pans or zooms sufficiently:
-- do not continuously rerun the search;
-- show "Search this area";
-- tapping it makes the current viewport the new searched area.
+If GPS permission/location is available, the initial camera centers on the
+current location at zoom 10.5. A manually selected place uses the same zoom.
 
 ## Map movement
 
@@ -137,10 +126,14 @@ Actual navigation is delegated to Google Maps in v1.
 
 User can search for another location.
 
-Place search uses Photon/OpenStreetMap for typo-tolerant results and occurs
-only after an explicit keyboard or button submission; there is no autocomplete
-or typeahead. Exact name matches are promoted ahead of prefix, contains, and
-fuzzy matches while preserving Photon order within each group.
+Place search uses Photon/OpenStreetMap typeahead. Opening any search sheet
+automatically focuses its field and opens the keyboard. Queries with fewer than
+two normalized characters do not search; longer queries debounce for about 375
+ms. Query changes cancel pending work and clear old suggestions immediately, and
+stale responses cannot replace results for the current query. The keyboard Search
+action runs immediately and hides the keyboard while leaving suggestions visible.
+Exact name matches are promoted ahead of prefix, contains, and fuzzy matches
+while preserving Photon order within each group.
 
 Use of the public service remains conservative:
 - no more than one HTTP request may start per second;
@@ -149,11 +142,13 @@ Use of the public service remains conservative:
 - search results show OpenStreetMap contributor attribution.
 
 Selecting it:
-- moves camera there;
-- uses the accepted nearby zoom 10.5;
-- automatically searches the resulting visible viewport for local stations.
+- closes the search sheet and keyboard;
+- moves the camera there at zoom 10.5;
+- creates or replaces one temporary searched-place marker;
+- leaves the normal all-stations source and any active route unchanged.
 
-The user can then pan/zoom and use Search this area.
+Selecting a suggestion does not open another sheet. While the one temporary
+searched-place marker exists, the map shows a compact floating Navigate action.
 
 ## Route mode
 
@@ -178,25 +173,40 @@ After route calculation:
 
 Stations should be shown near the route, not merely anywhere in the route's huge rectangular bounding box.
 
-The route sheet offers a session-only station corridor setting. Auto uses 2% of
-route length with a 3 km minimum and 10 km maximum. Fixed choices are 3, 5, 10,
-or 20 km. Changing the setting reruns only the local Room candidate query and
-geometry filter; it never requests a new route.
+The main drawer's Route section offers a session-only station corridor setting.
+Auto uses 2% of route length with a 3 km minimum and 10 km maximum. Fixed choices
+are 3, 5, 10, or 20 km. Changing the setting reruns only the local Room candidate
+query and geometry filter; it never requests a new route.
 
-While route mode is active, normal viewport Search this area is suppressed.
-Panning and zooming do not replace the corridor stations.
+While route mode is active, the station source contains only corridor-matching
+stations. Panning and zooming do not replace them.
 
 Google Maps still handles actual driving navigation.
 
 ### Phase 7 route behavior
 
-The route flow uses a compact black circular
-route control sits below place search and opens a Material 3 sheet with From and
-To inputs plus optional ordered stops. Each route point owns its query, submitted
-Photon results, error, and selected endpoint, so results render directly beneath
-the field being edited. Each endpoint is selected from an explicitly submitted Photon search;
-raw typed text is never routed. Endpoint searches are global because a trip may
-start outside Italy, while standalone place search remains Italy-only.
+The common route flow is deliberately short:
+
+Search -> choose destination -> Navigate -> choose From -> route immediately
+calculated.
+
+There is no dedicated Route control and no confirmation or Find route step. The
+Navigate action opens a minimal task-specific sheet containing only read-only
+destination context, an autofocused global Photon From typeahead, Use my location,
+suggestions, and attribution. Selecting a From suggestion or a usable current
+location closes the sheet and immediately requests OSRM. Failure retains the
+current active route and the temporary destination marker so the attempt can be
+retried.
+
+When a route is active, a top-left Add Stop control appears below Search. Its
+minimal sheet contains only an autofocused global Photon typeahead, suggestions,
+and attribution. Selecting a result inserts it immediately before the final
+destination, preserves all existing stop order, closes the sheet, and immediately
+recalculates the route.
+
+Temporary sheets contain only controls required for their immediate task and may
+expand to use most of the screen with the keyboard and suggestions. Advanced route
+management is not placed in these sheets.
 
 From can use the current location through the existing foreground permission and
 location infrastructure. It displays as My location, uses the current coordinates,
@@ -208,19 +218,24 @@ below the existing station layers, fits every route point with comfortable map
 padding, and shows a compact distance/duration summary. It does not provide
 turn-by-turn directions or navigation.
 
-Find route validates every point, hides the keyboard, closes the sheet immediately,
-and shows a compact calculating overlay on the map. Failure keeps the draft and
-any previous active route and reports a concise Snackbar.
+Every quick route request hides the keyboard, closes its sheet immediately, and
+shows a compact calculating overlay on the map. Failure keeps the previous active
+route and reports a concise Snackbar.
 
 Active route waypoints use source/layer rendering above station layers: A for a
 non-GPS origin, numbered intermediate stops, and B for destination. Tapping one
 animates to zoom 10.5 without changing route or nearby/search state.
 
-Selecting a standalone Photon result also creates one temporary, session-only
-place marker. Tapping it shows its place name with Route here and Remove marker.
-Route here opens the route sheet with To prefilled and also prefills From with My
-location only when a usable location is already available. A successful matching
-route destination replaces that temporary marker with route waypoint markers.
+Selecting a standalone Photon result creates one temporary, session-only place
+marker and floating Navigate action. A successful route containing that point
+removes the temporary marker because route waypoint markers become authoritative.
+
+The main hamburger drawer contains a Route section while a route is active. It
+shows From, every numbered intermediate stop, and To. Intermediate stops can be
+reordered with up/down controls or removed. These edits remain a draft until Apply
+changes, which closes the drawer and requests one recalculation; Done closes the
+drawer without OSRM when order is unchanged. From stays first and To stays last.
+The corridor selector also lives here and applies immediately without OSRM.
 
 Route stations are selected by actual geometric distance to the OSRM route, not
 merely by inclusion in the route bounding box. Room first retrieves candidates
@@ -234,10 +249,11 @@ The automatic geometric corridor is:
 This is a maximum straight-line distance from route geometry, not a driving
 detour distance. It can be tuned after physical testing.
 
-While a route is active, normal viewport searches and Search this area are
-suppressed. Clearing the route retains the current camera and searches that
-viewport normally. Current-location recentering or standalone place selection
-also clears route mode before returning to nearby behavior.
+Normal place search remains available while a route is active and does not clear
+or recalculate it. The GPS locator is always a camera-only action at zoom 10.5;
+it retains route geometry, endpoints, waypoints, corridor setting, filtered
+stations, and summary. Clearing the route retains the camera and restores all
+locally stored stations to the normal clustered source.
 
 
 ## Offline behavior

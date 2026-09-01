@@ -264,15 +264,24 @@ If offline:
 
 Never erase valid local data because a refresh fails.
 
-Phase 8A makes startup offline-safe with a bundled local MapLibre style. The
-fallback basemap is intentionally minimal: it has only a plain background and
-does not request remote tiles, sprites, or glyphs. Local Room stations,
-clustering, station details, current-session route geometry, and GPS remain
-usable on it. Glyph-dependent station prices, cluster counts, and waypoint text
-are omitted on this fallback, while their circle and line geometry remains.
+Phase 8A uses two deliberately separate styles. A validated-online launch loads
+the original remote OpenFreeMap Liberty style unchanged. An offline launch loads
+a tiny bundled style containing only a neutral background and a local glyph URL,
+with no basemap sources or sprite. Both styles receive the same dynamic station,
+route, waypoint, and location layers after loading.
 
-Photon place search, OSRM routing, MIMIT refresh/live enrichment, and the normal
-OpenFreeMap Liberty basemap remain online-only and fail without deleting valid
+The offline style uses bundled `Noto Sans Regular` PBF assets, so local Room
+station prices, cluster counts, route waypoint text, clustering, station details,
+current-session route geometry, and GPS remain usable without network access.
+The temporary searched-place marker is represented by its circle rather than a
+decorative text glyph.
+
+Offline mode intentionally has no roads, landcover, places, POIs, or terrain.
+Online Liberty continues using OpenFreeMap's own sources, sprite, and glyphs
+without modification.
+
+Photon place search, OSRM routing, MIMIT refresh/live enrichment, and uncached
+OpenFreeMap basemap resources remain online-only and fail without deleting valid
 local data or an active route.
 
 A downloadable full offline basemap is future Phase 8B work, pending selection

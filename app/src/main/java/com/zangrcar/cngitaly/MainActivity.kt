@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.os.Bundle
 import android.os.Looper
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -53,7 +54,7 @@ class MainActivity : ComponentActivity() {
     private var placeWaypointMapLayer: PlaceWaypointMapLayer? = null
     private var routeLocationRequest = false
     private var styleBeingLoaded: InitialMapStyle? = null
-    private var onlineStyleFallbackStarted = false
+    private var onlineFallbackStarted = false
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -94,13 +95,14 @@ class MainActivity : ComponentActivity() {
         MapLibre.getInstance(this)
         mapView = MapView(this)
         mapView.onCreate(savedInstanceState)
-        mapView.addOnDidFailLoadingMapListener {
-            val map = map ?: return@addOnDidFailLoadingMapListener
-            if (styleBeingLoaded == InitialMapStyle.ONLINE_LIBERTY && !onlineStyleFallbackStarted) {
-                onlineStyleFallbackStarted = true
+        mapView.addOnDidFailLoadingMapListener { error ->
+            Log.e(MAP_STYLE_LOG_TAG, "Map style failed to load: $error")
+            loadedStyle = null
+            val map = map
+            if (map != null && styleBeingLoaded == InitialMapStyle.ONLINE_LIBERTY && !onlineFallbackStarted) {
+                onlineFallbackStarted = true
                 loadMapStyle(map, InitialMapStyle.OFFLINE_ASSET)
-            } else if (styleBeingLoaded == InitialMapStyle.OFFLINE_ASSET) {
-                loadedStyle = null
+            } else {
                 locationMessage = "Map unavailable."
             }
         }
@@ -163,16 +165,12 @@ class MainActivity : ComponentActivity() {
 
     private fun loadMapStyle(map: MapLibreMap, choice: InitialMapStyle) {
         styleBeingLoaded = choice
-        val styleUri = when (choice) {
-            InitialMapStyle.ONLINE_LIBERTY -> ONLINE_STYLE_URI
-            InitialMapStyle.OFFLINE_ASSET -> OFFLINE_STYLE_URI
-        }
-        map.setStyle(styleUri) { style ->
-            if (styleBeingLoaded == choice) onStyleReady(map, style, choice)
+        map.setStyle(choice.uri) { style ->
+            if (styleBeingLoaded == choice) onStyleReady(map, style)
         }
     }
 
-    private fun onStyleReady(map: MapLibreMap, style: Style, choice: InitialMapStyle) {
+    private fun onStyleReady(map: MapLibreMap, style: Style) {
         loadedStyle = style
         stationMapLayer?.destroy()
         routeMapLayer = RouteMapLayer(map, style).also { layer ->
@@ -181,14 +179,12 @@ class MainActivity : ComponentActivity() {
         stationMapLayer = StationMapLayer(
             map = map,
             style = style,
-            textLabelsEnabled = choice.textLabelsEnabled,
             onStationSelected = mainViewModel::selectStation
         ).also { it.update(mainViewModel.stations.value) }
         placeWaypointMapLayer?.destroy()
         placeWaypointMapLayer = PlaceWaypointMapLayer(
             map = map,
             style = style,
-            textLabelsEnabled = choice.textLabelsEnabled,
             onWaypointClick = { endpoint ->
                 map.animateCamera(
                     CameraUpdateFactory.newLatLngZoom(
@@ -389,7 +385,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val HAS_CENTERED_KEY = "has_centered_on_location"
-        private const val ONLINE_STYLE_URI = "https://tiles.openfreemap.org/styles/liberty"
-        private const val OFFLINE_STYLE_URI = "asset://styles/offline.json"
+        private const val MAP_STYLE_LOG_TAG = "CngMapStyle"
     }
 }

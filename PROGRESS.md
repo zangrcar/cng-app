@@ -13,9 +13,9 @@ the main drawer owns full ordered route editing and the Auto/3/5/10/20 km
 corridor setting. The GPS locator moves only the camera and preserves any active
 route. Route mode projects only stations within the selected geometric corridor.
 
-Phase 8A provides an intentionally minimal bundled fallback style for safe
-offline startup. A downloadable full offline basemap and Slovenia support are
-not implemented.
+Phase 8A uses the original remote Liberty style online and a separate minimal
+bundled style with app-owned marker glyphs offline. Detailed offline basemap data,
+download support, and Slovenia support are not implemented.
 
 Branch:
 android-native
@@ -40,7 +40,7 @@ android-native
 - [x] 5. Station bottom sheet + live details + Google Maps navigation
 - [x] 6. Search for another place
 - [x] 7. Ordered route mode + stations along route (technically complete)
-- [x] 8A. Offline-safe startup with minimal bundled style (physical verification pending)
+- [x] 8A. Offline-safe style and app-owned overlays (glyph fix physical verification pending)
 - [ ] 8B. Downloadable full offline basemap
 - [ ] 8C. Remaining polish/testing on real phone
 
@@ -409,6 +409,52 @@ Phase 8A offline-safe app behavior (2026-09-01):
 - `.\gradlew.bat test`: PASS
 - `.\gradlew.bat assembleDebug`: PASS
 - physical offline-device verification: pending
+
+Phase 8A offline MapLibre resource correction (2026-09-01):
+- replaced the separate remote-Liberty/minimal-fallback choice with one current
+  Liberty style bundled at `asset://map/liberty.json`; its normal OpenFreeMap
+  tile sources and sprite remain network-backed
+- changed the style-wide glyph template to
+  `asset://map/glyphs/{fontstack}/{range}.pbf` and bundled Liberty's Noto Sans
+  Regular/Italic/Bold Latin and Latin-extended ranges plus Regular 8192-8447 for
+  the Euro sign used by station prices
+- station price, cluster count, and route waypoint SymbolLayers are now always
+  installed and retain exactly `Noto Sans Regular`; the decorative searched-place
+  dot text was removed because its existing circle is authoritative
+- local Room stations, circles, prices, counts, taps/details, route overlays,
+  and GPS are expected to work in airplane mode; uncached detailed basemap tiles
+  remain unavailable offline
+- replaced style-selection tests with local style/glyph URL checks and nonempty
+  required-glyph asset checks; verified all style and glyph assets are packaged
+  in the debug APK
+- total unit tests: 103 PASS
+- `.\gradlew.bat test`: PASS
+- `.\gradlew.bat assembleDebug`: PASS
+- physical airplane-mode glyph verification: pending
+- Offline overlays fixed; detailed offline basemap data still pending.
+
+Phase 8A two-style regression repair (2026-09-01):
+- reverted the locally modified Liberty style that caused total map-style
+  failure; online startup again uses the unchanged known-good
+  `https://tiles.openfreemap.org/styles/liberty`
+- added independent `asset://map/offline.json` with only a neutral background,
+  local Noto glyph template, no sources, and no sprite
+- validated connectivity selects remote Liberty or the offline asset once during
+  MainActivity map initialization; a failed online style load is logged under
+  `CngMapStyle` and falls back once to the offline style
+- both loaded styles use the same initialization for route, station, waypoint,
+  searched-place, and location layers; dynamic text layers remain enabled with
+  exactly `Noto Sans Regular`
+- retained only app-required local glyphs: Regular 0-255 for digits/A/B and
+  Regular 8192-8447 for the Euro sign; removed the decorative place-marker glyph
+  dependency
+- removed the unused bundled Liberty JSON and its extra Bold/Italic/extended
+  glyph downloads; these generated assets were deleted directly and are not
+  recoverable from the working tree
+- total unit tests: 103 PASS
+- `.\gradlew.bat test`: PASS
+- `.\gradlew.bat assembleDebug`: PASS
+- online and airplane-mode physical verification: pending
 
 ## Important discoveries
 

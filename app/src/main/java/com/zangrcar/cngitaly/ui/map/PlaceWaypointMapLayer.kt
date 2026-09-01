@@ -18,6 +18,7 @@ import org.maplibre.geojson.Point
 class PlaceWaypointMapLayer(
     private val map: MapLibreMap,
     style: Style,
+    private val textLabelsEnabled: Boolean,
     private val onWaypointClick: (RouteEndpoint) -> Unit,
     private val onPlaceClick: (PlaceSearchResult) -> Unit
 ) : MapLibreMap.OnMapClickListener {
@@ -32,12 +33,14 @@ class PlaceWaypointMapLayer(
             PropertyFactory.circleRadius(16f), PropertyFactory.circleStrokeColor(Color.WHITE),
             PropertyFactory.circleStrokeWidth(3f), PropertyFactory.circleOpacity(1f)
         ))
-        style.addLayer(SymbolLayer(TEXT_ID, SOURCE_ID).withProperties(
-            PropertyFactory.textField(Expression.get("label")),
-            PropertyFactory.textFont(arrayOf("Noto Sans Regular")), PropertyFactory.textSize(13f),
-            PropertyFactory.textColor(Color.WHITE), PropertyFactory.textAllowOverlap(true),
-            PropertyFactory.textIgnorePlacement(true)
-        ))
+        if (textLabelsEnabled) {
+            style.addLayer(SymbolLayer(TEXT_ID, SOURCE_ID).withProperties(
+                PropertyFactory.textField(Expression.get("label")),
+                PropertyFactory.textFont(arrayOf("Noto Sans Regular")), PropertyFactory.textSize(13f),
+                PropertyFactory.textColor(Color.WHITE), PropertyFactory.textAllowOverlap(true),
+                PropertyFactory.textIgnorePlacement(true)
+            ))
+        }
         map.addOnMapClickListener(this)
     }
 
@@ -62,7 +65,10 @@ class PlaceWaypointMapLayer(
     }
 
     override fun onMapClick(point: LatLng): Boolean {
-        val feature = map.queryRenderedFeatures(map.projection.toScreenLocation(point), TEXT_ID, CIRCLE_ID).firstOrNull() ?: return false
+        val feature = map.queryRenderedFeatures(
+            map.projection.toScreenLocation(point),
+            *interactionLayerIds(textLabelsEnabled)
+        ).firstOrNull() ?: return false
         return if (feature.getStringProperty("kind") == "place") {
             place?.let(onPlaceClick); place != null
         } else {
@@ -72,5 +78,12 @@ class PlaceWaypointMapLayer(
 
     fun destroy() = map.removeOnMapClickListener(this)
 
-    companion object { private const val SOURCE_ID = "cng-route-points"; internal const val CIRCLE_ID = "cng-route-point-circles"; internal const val TEXT_ID = "cng-route-point-labels" }
+    companion object {
+        private const val SOURCE_ID = "cng-route-points"
+        internal const val CIRCLE_ID = "cng-route-point-circles"
+        internal const val TEXT_ID = "cng-route-point-labels"
+
+        internal fun interactionLayerIds(textLabelsEnabled: Boolean): Array<String> =
+            if (textLabelsEnabled) arrayOf(TEXT_ID, CIRCLE_ID) else arrayOf(CIRCLE_ID)
+    }
 }

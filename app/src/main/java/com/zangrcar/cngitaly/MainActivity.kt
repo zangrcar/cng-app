@@ -52,6 +52,8 @@ class MainActivity : ComponentActivity() {
     private var routeMapLayer: RouteMapLayer? = null
     private var placeWaypointMapLayer: PlaceWaypointMapLayer? = null
     private var routeLocationRequest = false
+    private var styleBeingLoaded: InitialMapStyle? = null
+    private var onlineStyleFallbackStarted = false
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -92,36 +94,19 @@ class MainActivity : ComponentActivity() {
         MapLibre.getInstance(this)
         mapView = MapView(this)
         mapView.onCreate(savedInstanceState)
+        mapView.addOnDidFailLoadingMapListener {
+            val map = map ?: return@addOnDidFailLoadingMapListener
+            if (styleBeingLoaded == InitialMapStyle.ONLINE_LIBERTY && !onlineStyleFallbackStarted) {
+                onlineStyleFallbackStarted = true
+                loadMapStyle(map, InitialMapStyle.OFFLINE_ASSET)
+            } else if (styleBeingLoaded == InitialMapStyle.OFFLINE_ASSET) {
+                loadedStyle = null
+                locationMessage = "Map unavailable."
+            }
+        }
         mapView.getMapAsync { map ->
             this.map = map
-            map.setStyle("https://tiles.openfreemap.org/styles/liberty") { style ->
-                loadedStyle = style
-                stationMapLayer?.destroy()
-                routeMapLayer = RouteMapLayer(map, style).also { layer ->
-                    mainViewModel.activeRoute.value?.let { layer.update(it.points) }
-                }
-                stationMapLayer = StationMapLayer(
-                    map = map,
-                    style = style,
-                    onStationSelected = mainViewModel::selectStation
-                ).also {
-                    val stations = mainViewModel.stations.value
-                    it.update(stations)
-                }
-                placeWaypointMapLayer?.destroy()
-                placeWaypointMapLayer = PlaceWaypointMapLayer(map, style,
-                    onWaypointClick = { endpoint ->
-                        map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(endpoint.latitude, endpoint.longitude), 10.5), 700)
-                    },
-                    onPlaceClick = { }
-                ).also { layer ->
-                    layer.updateWaypoints(mainViewModel.activeRoute.value?.endpoints.orEmpty())
-                    layer.updatePlace(mainViewModel.searchedPlaceMarker.value)
-                }
-                if (hasForegroundLocationPermission()) {
-                    enableLocationAndCenter(showWaiting = false)
-                }
-            }
+            loadMapStyle(map, initialMapStyle(mainViewModel.isValidatedInternetAvailable))
             map.uiSettings.isLogoEnabled = true
             map.uiSettings.isAttributionEnabled = true
             map.uiSettings.isCompassEnabled = true
@@ -174,6 +159,51 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    private fun loadMapStyle(map: MapLibreMap, choice: InitialMapStyle) {
+        styleBeingLoaded = choice
+        val styleUri = when (choice) {
+            InitialMapStyle.ONLINE_LIBERTY -> ONLINE_STYLE_URI
+            InitialMapStyle.OFFLINE_ASSET -> OFFLINE_STYLE_URI
+        }
+        map.setStyle(styleUri) { style ->
+            if (styleBeingLoaded == choice) onStyleReady(map, style, choice)
+        }
+    }
+
+    private fun onStyleReady(map: MapLibreMap, style: Style, choice: InitialMapStyle) {
+        loadedStyle = style
+        stationMapLayer?.destroy()
+        routeMapLayer = RouteMapLayer(map, style).also { layer ->
+            mainViewModel.activeRoute.value?.let { layer.update(it.points) }
+        }
+        stationMapLayer = StationMapLayer(
+            map = map,
+            style = style,
+            textLabelsEnabled = choice.textLabelsEnabled,
+            onStationSelected = mainViewModel::selectStation
+        ).also { it.update(mainViewModel.stations.value) }
+        placeWaypointMapLayer?.destroy()
+        placeWaypointMapLayer = PlaceWaypointMapLayer(
+            map = map,
+            style = style,
+            textLabelsEnabled = choice.textLabelsEnabled,
+            onWaypointClick = { endpoint ->
+                map.animateCamera(
+                    CameraUpdateFactory.newLatLngZoom(
+                        LatLng(endpoint.latitude, endpoint.longitude),
+                        10.5
+                    ),
+                    700
+                )
+            },
+            onPlaceClick = { }
+        ).also { layer ->
+            layer.updateWaypoints(mainViewModel.activeRoute.value?.endpoints.orEmpty())
+            layer.updatePlace(mainViewModel.searchedPlaceMarker.value)
+        }
+        if (hasForegroundLocationPermission()) enableLocationAndCenter(showWaiting = false)
     }
 
     override fun onStart() { super.onStart(); mapView.onStart() }
@@ -359,5 +389,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val HAS_CENTERED_KEY = "has_centered_on_location"
+        private const val ONLINE_STYLE_URI = "https://tiles.openfreemap.org/styles/liberty"
+        private const val OFFLINE_STYLE_URI = "asset://styles/offline.json"
     }
 }

@@ -1,0 +1,14 @@
+{
+  "version": 8,
+  "name": "CNG Italy Offline",
+  "sources": {},
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#E8ECE7"
+      }
+    }
+  ]
+}

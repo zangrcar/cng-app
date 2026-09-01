@@ -264,10 +264,20 @@ If offline:
 
 Never erase valid local data because a refresh fails.
 
-Future offline-map work, intentionally not part of Phase 4:
-- bundle the map style with the APK;
-- support a downloadable and updateable MapLibre offline region for Italy;
-- choose a sensible maximum offline zoom to control download size.
+Phase 8A makes startup offline-safe with a bundled local MapLibre style. The
+fallback basemap is intentionally minimal: it has only a plain background and
+does not request remote tiles, sprites, or glyphs. Local Room stations,
+clustering, station details, current-session route geometry, and GPS remain
+usable on it. Glyph-dependent station prices, cluster counts, and waypoint text
+are omitted on this fallback, while their circle and line geometry remains.
+
+Photon place search, OSRM routing, MIMIT refresh/live enrichment, and the normal
+OpenFreeMap Liberty basemap remain online-only and fail without deleting valid
+local data or an active route.
+
+A downloadable full offline basemap is future Phase 8B work, pending selection
+of a suitable tile/package source and compatible usage terms. Phase 8A does not
+download or bundle Italy vector tiles.
 
 ## Architecture principles
 

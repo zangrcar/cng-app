@@ -58,6 +58,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val connectivityManager =
         application.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     private val online = MutableStateFlow(hasValidatedInternet())
+    val isValidatedInternetAvailable: Boolean get() = online.value
     private val refreshing = MutableStateFlow(false)
     private val _stations = MutableStateFlow<List<MapStation>>(emptyList())
     val stations = _stations.asStateFlow()
@@ -118,6 +119,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refresh(showSuccessMessage: Boolean = true) {
         if (refreshing.value) return
+        if (!online.value) {
+            if (showSuccessMessage) {
+                _messages.tryEmit("Refresh failed. Keeping existing station data.")
+            }
+            return
+        }
         viewModelScope.launch {
             refreshing.value = true
             try {

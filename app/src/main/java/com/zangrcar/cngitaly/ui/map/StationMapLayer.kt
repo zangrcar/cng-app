@@ -19,6 +19,7 @@ import com.zangrcar.cngitaly.data.MapStation
 class StationMapLayer(
     private val map: MapLibreMap,
     style: Style,
+    private val textLabelsEnabled: Boolean,
     private val onStationSelected: (Int) -> Unit
 ) : MapLibreMap.OnMapClickListener {
     init {
@@ -58,20 +59,22 @@ class StationMapLayer(
                     PropertyFactory.circleStrokeWidth(2f)
                 )
         )
-        style.addLayer(
-            SymbolLayer(STATION_PRICE_LAYER_ID, SOURCE_ID)
-                .withFilter(isNotCluster())
-                .withProperties(
-                    PropertyFactory.textField(Expression.get("priceLabel")),
-                    PropertyFactory.textFont(arrayOf("Noto Sans Regular")),
-                    PropertyFactory.textSize(12f),
-                    PropertyFactory.textColor(Color.WHITE),
-                    PropertyFactory.textHaloColor(Color.BLACK),
-                    PropertyFactory.textHaloWidth(0.6f),
-                    PropertyFactory.textAllowOverlap(true),
-                    PropertyFactory.textIgnorePlacement(true)
-                )
-        )
+        if (textLabelsEnabled) {
+            style.addLayer(
+                SymbolLayer(STATION_PRICE_LAYER_ID, SOURCE_ID)
+                    .withFilter(isNotCluster())
+                    .withProperties(
+                        PropertyFactory.textField(Expression.get("priceLabel")),
+                        PropertyFactory.textFont(arrayOf("Noto Sans Regular")),
+                        PropertyFactory.textSize(12f),
+                        PropertyFactory.textColor(Color.WHITE),
+                        PropertyFactory.textHaloColor(Color.BLACK),
+                        PropertyFactory.textHaloWidth(0.6f),
+                        PropertyFactory.textAllowOverlap(true),
+                        PropertyFactory.textIgnorePlacement(true)
+                    )
+            )
+        }
         style.addLayer(
             CircleLayer(CLUSTER_CIRCLE_LAYER_ID, SOURCE_ID)
                 .withFilter(isCluster())
@@ -83,25 +86,31 @@ class StationMapLayer(
                     PropertyFactory.circleStrokeWidth(2f)
                 )
         )
-        style.addLayer(
-            SymbolLayer(CLUSTER_COUNT_LAYER_ID, SOURCE_ID)
-                .withFilter(isCluster())
-                .withProperties(
-                    PropertyFactory.textField(Expression.get("point_count_abbreviated")),
-                    PropertyFactory.textFont(arrayOf("Noto Sans Regular")),
-                    PropertyFactory.textSize(13f),
-                    PropertyFactory.textColor(Color.WHITE),
-                    PropertyFactory.textHaloColor(Color.BLACK),
-                    PropertyFactory.textHaloWidth(0.6f),
-                    PropertyFactory.textAllowOverlap(true),
-                    PropertyFactory.textIgnorePlacement(true)
-                )
-        )
+        if (textLabelsEnabled) {
+            style.addLayer(
+                SymbolLayer(CLUSTER_COUNT_LAYER_ID, SOURCE_ID)
+                    .withFilter(isCluster())
+                    .withProperties(
+                        PropertyFactory.textField(Expression.get("point_count_abbreviated")),
+                        PropertyFactory.textFont(arrayOf("Noto Sans Regular")),
+                        PropertyFactory.textSize(13f),
+                        PropertyFactory.textColor(Color.WHITE),
+                        PropertyFactory.textHaloColor(Color.BLACK),
+                        PropertyFactory.textHaloWidth(0.6f),
+                        PropertyFactory.textAllowOverlap(true),
+                        PropertyFactory.textIgnorePlacement(true)
+                    )
+            )
+        }
     }
 
     override fun onMapClick(point: LatLng): Boolean {
         val screenPoint = map.projection.toScreenLocation(point)
-        if (map.queryRenderedFeatures(screenPoint, PlaceWaypointMapLayer.TEXT_ID, PlaceWaypointMapLayer.CIRCLE_ID).isNotEmpty()) return false
+        if (map.queryRenderedFeatures(
+                screenPoint,
+                *PlaceWaypointMapLayer.interactionLayerIds(textLabelsEnabled)
+            ).isNotEmpty()
+        ) return false
         val cluster = map.queryRenderedFeatures(
             screenPoint,
             CLUSTER_CIRCLE_LAYER_ID
@@ -122,8 +131,7 @@ class StationMapLayer(
 
         val station = map.queryRenderedFeatures(
             screenPoint,
-            STATION_PRICE_LAYER_ID,
-            STATION_CIRCLE_LAYER_ID
+            *stationInteractionLayerIds(textLabelsEnabled)
         ).firstOrNull() ?: return false
         val stationId = station.getNumberProperty("stationId")?.toInt() ?: return false
         onStationSelected(stationId)
@@ -144,6 +152,10 @@ class StationMapLayer(
         private fun isCluster(): Expression = Expression.has("point_count")
 
         private fun isNotCluster(): Expression = Expression.not(Expression.has("point_count"))
+
+        internal fun stationInteractionLayerIds(textLabelsEnabled: Boolean): Array<String> =
+            if (textLabelsEnabled) arrayOf(STATION_PRICE_LAYER_ID, STATION_CIRCLE_LAYER_ID)
+            else arrayOf(STATION_CIRCLE_LAYER_ID)
     }
 }
 

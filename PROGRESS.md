@@ -13,7 +13,9 @@ the main drawer owns full ordered route editing and the Auto/3/5/10/20 km
 corridor setting. The GPS locator moves only the camera and preserves any active
 route. Route mode projects only stations within the selected geometric corridor.
 
-Offline maps and Slovenia support are not implemented.
+Phase 8A provides an intentionally minimal bundled fallback style for safe
+offline startup. A downloadable full offline basemap and Slovenia support are
+not implemented.
 
 Branch:
 android-native
@@ -37,8 +39,10 @@ android-native
 - [x] 4. Show local stations for map viewport + Search this area + clustering
 - [x] 5. Station bottom sheet + live details + Google Maps navigation
 - [x] 6. Search for another place
-- [ ] 7. Ordered route mode + stations along route (7A/7B implemented; physical verification pending)
-- [ ] 8. Offline/polish/testing on real phone
+- [x] 7. Ordered route mode + stations along route (technically complete)
+- [x] 8A. Offline-safe startup with minimal bundled style (physical verification pending)
+- [ ] 8B. Downloadable full offline basemap
+- [ ] 8C. Remaining polish/testing on real phone
 
 ## Implementation history
 
@@ -382,6 +386,29 @@ Offline route-loading state correction (2026-09-01):
 - total unit tests: 101 PASS
 - `.\gradlew.bat test`: PASS
 - `.\gradlew.bat assembleDebug`: PASS
+
+Phase 8A offline-safe app behavior (2026-09-01):
+- Phase 7 is technically complete
+- added `asset://styles/offline.json`, containing only a local background layer
+  with no remote sources, tiles, sprites, or glyphs
+- validated internet at initial map setup selects OpenFreeMap Liberty; an
+  offline start selects the bundled style immediately, and a failed initial
+  Liberty load falls back once to the bundled style
+- both styles share one custom-layer initialization path that restores current
+  stations, active route geometry/waypoints, temporary place marker, and the
+  permission-backed location component without route recalculation
+- Liberty retains station price, cluster count, and waypoint text with the
+  explicit `Noto Sans Regular` font; the local style omits those SymbolLayers
+  while retaining station/cluster/waypoint circles, route lines, and taps
+- existing Room station loading/details and GPS remain connectivity-independent;
+  Photon, OSRM, and MIMIT refresh exit before HTTP while offline, and live
+  enrichment remains skipped offline
+- added 2 pure tests for initial style selection and online/offline station and
+  waypoint text/interaction configuration
+- total unit tests: 103 PASS
+- `.\gradlew.bat test`: PASS
+- `.\gradlew.bat assembleDebug`: PASS
+- physical offline-device verification: pending
 
 ## Important discoveries
 

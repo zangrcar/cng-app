@@ -18,3 +18,29 @@ internal enum class InitialMapStyle(val uri: String) {
 
 internal fun initialMapStyle(validatedInternet: Boolean): InitialMapStyle =
     if (validatedInternet) InitialMapStyle.ONLINE_LIBERTY else InitialMapStyle.OFFLINE_ASSET
+
+internal data class MapStyleRequest(val style: InitialMapStyle, val generation: Long)
+
+internal class MapStyleRequestTracker {
+    var desiredStyle: InitialMapStyle? = null
+        private set
+    var requestedStyle: InitialMapStyle? = null
+        private set
+    private var generation = 0L
+
+    fun updateDesired(style: InitialMapStyle) {
+        desiredStyle = style
+    }
+
+    fun nextRequest(): MapStyleRequest? {
+        val desired = desiredStyle ?: return null
+        if (requestedStyle == desired) return null
+        requestedStyle = desired
+        return MapStyleRequest(desired, ++generation)
+    }
+
+    fun isAuthoritative(request: MapStyleRequest): Boolean =
+        request.generation == generation &&
+            request.style == desiredStyle &&
+            request.style == requestedStyle
+}

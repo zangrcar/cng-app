@@ -59,6 +59,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         application.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     private val online = MutableStateFlow(hasValidatedInternet())
     val isValidatedInternetAvailable: Boolean get() = online.value
+    val validatedInternet = online.asStateFlow()
     private val refreshing = MutableStateFlow(false)
     private val _stations = MutableStateFlow<List<MapStation>>(emptyList())
     val stations = _stations.asStateFlow()

@@ -476,6 +476,25 @@ Online Liberty fallback diagnostic correction (2026-09-01):
 - online Liberty physical restoration and the exact device failure message:
   pending device verification
 
+Lifecycle-aware map style selection (2026-09-01):
+- exposed the existing ConnectivityManager-backed `online` StateFlow as
+  `validatedInternet`; no second connectivity source or callback was added
+- MainActivity collects that StateFlow while STARTED, updates the desired style,
+  and applies it whenever both connectivity intent and MapLibreMap are available
+- a small generation tracker suppresses duplicate `setStyle` calls and rejects
+  stale callbacks when connectivity changes during style loading
+- every authoritative style callback reinstalls route, station, waypoint/place,
+  and location layers from current ViewModel state; style changes preserve the
+  MapLibre camera and disable repeat automatic GPS centering after the first
+  successfully loaded style
+- failure logging remains diagnostic only and never changes the desired style
+- added 2 focused tests for offline-to-online latest-wins behavior, stale callback
+  rejection, and duplicate request suppression
+- total unit tests: 105 PASS
+- `.\gradlew.bat test`: PASS
+- `.\gradlew.bat assembleDebug`: PASS
+- physical connectivity transition verification: pending
+
 ## Important discoveries
 
 - MapLibre Android 13.x uses Vulkan for `org.maplibre.gl:android-sdk`; the explicit OpenGL artifact is `org.maplibre.gl:android-sdk-opengl:13.3.1`.

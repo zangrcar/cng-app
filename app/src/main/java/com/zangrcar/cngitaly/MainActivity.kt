@@ -12,6 +12,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -53,7 +55,7 @@ class MainActivity : ComponentActivity() {
     private var routeMapLayer: RouteMapLayer? = null
     private var placeWaypointMapLayer: PlaceWaypointMapLayer? = null
     private var routeLocationRequest = false
-    private var styleBeingLoaded: InitialMapStyle? = null
+    private val styleRequests = MapStyleRequestTracker()
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -95,17 +97,16 @@ class MainActivity : ComponentActivity() {
         mapView = MapView(this)
         mapView.onCreate(savedInstanceState)
         mapView.addOnDidFailLoadingMapListener { error ->
-            Log.e(MAP_STYLE_LOG_TAG, "load failure while $styleBeingLoaded: $error")
-            if (styleBeingLoaded == InitialMapStyle.OFFLINE_ASSET) {
+            val requested = styleRequests.requestedStyle
+            Log.e(MAP_STYLE_LOG_TAG, "load failure while $requested: $error")
+            if (requested == InitialMapStyle.OFFLINE_ASSET) {
                 loadedStyle = null
                 locationMessage = "Map unavailable."
             }
         }
         mapView.getMapAsync { map ->
             this.map = map
-            val validatedInternet = mainViewModel.isValidatedInternetAvailable
-            Log.i(MAP_STYLE_LOG_TAG, "validatedInternet=$validatedInternet")
-            loadMapStyle(map, initialMapStyle(validatedInternet))
+            applyDesiredStyleIfPossible()
             map.uiSettings.isLogoEnabled = true
             map.uiSettings.isAttributionEnabled = true
             map.uiSettings.isCompassEnabled = true
@@ -123,6 +124,18 @@ class MainActivity : ComponentActivity() {
                     .target(LatLng(42.5, 12.5))
                     .zoom(5.5)
                     .build()
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                mainViewModel.validatedInternet
+                    .collect { validatedInternet ->
+                        Log.i(MAP_STYLE_LOG_TAG, "validatedInternet=$validatedInternet")
+                        val desired = initialMapStyle(validatedInternet)
+                        Log.i(MAP_STYLE_LOG_TAG, "desired $desired")
+                        styleRequests.updateDesired(desired)
+                        applyDesiredStyleIfPossible()
+                    }
             }
         }
         lifecycleScope.launch {
@@ -160,18 +173,19 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun loadMapStyle(map: MapLibreMap, choice: InitialMapStyle) {
-        styleBeingLoaded = choice
-        Log.i(MAP_STYLE_LOG_TAG, "requesting $choice ${choice.uri}")
-        map.setStyle(choice.uri) { style ->
-            if (styleBeingLoaded == choice) {
-                Log.i(MAP_STYLE_LOG_TAG, "$choice style callback completed")
-                onStyleReady(map, style)
-            }
+    private fun applyDesiredStyleIfPossible() {
+        val map = map ?: return
+        val request = styleRequests.nextRequest() ?: return
+        Log.i(MAP_STYLE_LOG_TAG, "requesting ${request.style} ${request.style.uri}")
+        map.setStyle(request.style.uri) { style ->
+            if (!styleRequests.isAuthoritative(request)) return@setStyle
+            Log.i(MAP_STYLE_LOG_TAG, "loaded ${request.style}")
+            onStyleReady(map, style)
         }
     }
 
     private fun onStyleReady(map: MapLibreMap, style: Style) {
+        val isFirstLoadedStyle = loadedStyle == null
         loadedStyle = style
         stationMapLayer?.destroy()
         routeMapLayer = RouteMapLayer(map, style).also { layer ->
@@ -200,7 +214,12 @@ class MainActivity : ComponentActivity() {
             layer.updateWaypoints(mainViewModel.activeRoute.value?.endpoints.orEmpty())
             layer.updatePlace(mainViewModel.searchedPlaceMarker.value)
         }
-        if (hasForegroundLocationPermission()) enableLocationAndCenter(showWaiting = false)
+        if (hasForegroundLocationPermission()) {
+            enableLocationAndCenter(
+                showWaiting = false,
+                allowAutomaticCenter = isFirstLoadedStyle
+            )
+        }
     }
 
     override fun onStart() { super.onStart(); mapView.onStart() }
@@ -242,7 +261,11 @@ class MainActivity : ComponentActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) ==
             PackageManager.PERMISSION_GRANTED
 
-    private fun enableLocationAndCenter(showWaiting: Boolean, forceCenter: Boolean = false) {
+    private fun enableLocationAndCenter(
+        showWaiting: Boolean,
+        forceCenter: Boolean = false,
+        allowAutomaticCenter: Boolean = true
+    ) {
         val map = map ?: return
         val style = loadedStyle ?: return
         if (!hasForegroundLocationPermission()) return
@@ -260,7 +283,7 @@ class MainActivity : ComponentActivity() {
             locationComponent.renderMode = RenderMode.NORMAL
             locationComponent.cameraMode = CameraMode.NONE
 
-            if (forceCenter || !hasCenteredOnLocation) {
+            if (forceCenter || (allowAutomaticCenter && !hasCenteredOnLocation)) {
                 centerWhenLocationArrives = true
                 val location = locationComponent.lastKnownLocation
                 if (location != null) {

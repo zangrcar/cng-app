@@ -29,5 +29,24 @@ class MapAssetsTest {
         }
     }
 
+    @Test fun `latest desired style wins and stale callback is rejected`() {
+        val tracker = MapStyleRequestTracker()
+        tracker.updateDesired(InitialMapStyle.OFFLINE_ASSET)
+        val offline = tracker.nextRequest()!!
+        tracker.updateDesired(InitialMapStyle.ONLINE_LIBERTY)
+        val online = tracker.nextRequest()!!
+
+        assertFalse(tracker.isAuthoritative(offline))
+        assertTrue(tracker.isAuthoritative(online))
+    }
+
+    @Test fun `repeated desired style does not create duplicate request`() {
+        val tracker = MapStyleRequestTracker()
+        tracker.updateDesired(InitialMapStyle.ONLINE_LIBERTY)
+        assertEquals(InitialMapStyle.ONLINE_LIBERTY, tracker.nextRequest()!!.style)
+        tracker.updateDesired(InitialMapStyle.ONLINE_LIBERTY)
+        assertEquals(null, tracker.nextRequest())
+    }
+
     private fun assetFile(relativePath: String) = File("src/main/assets", relativePath)
 }

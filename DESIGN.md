@@ -270,6 +270,11 @@ a tiny bundled style containing only a neutral background and a local glyph URL,
 with no basemap sources or sprite. Both styles receive the same dynamic station,
 route, waypoint, and location layers after loading.
 
+The activity observes the existing validated-connectivity state for its active
+session. Validation changes replace offline and online styles without restarting
+the app, resetting the camera, recalculating a route, or performing another
+automatic GPS recenter.
+
 The offline style uses bundled `Noto Sans Regular` PBF assets, so local Room
 station prices, cluster counts, route waypoint text, clustering, station details,
 current-session route geometry, and GPS remain usable without network access.

@@ -54,7 +54,6 @@ class MainActivity : ComponentActivity() {
     private var placeWaypointMapLayer: PlaceWaypointMapLayer? = null
     private var routeLocationRequest = false
     private var styleBeingLoaded: InitialMapStyle? = null
-    private var onlineFallbackStarted = false
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -96,19 +95,17 @@ class MainActivity : ComponentActivity() {
         mapView = MapView(this)
         mapView.onCreate(savedInstanceState)
         mapView.addOnDidFailLoadingMapListener { error ->
-            Log.e(MAP_STYLE_LOG_TAG, "Map style failed to load: $error")
-            loadedStyle = null
-            val map = map
-            if (map != null && styleBeingLoaded == InitialMapStyle.ONLINE_LIBERTY && !onlineFallbackStarted) {
-                onlineFallbackStarted = true
-                loadMapStyle(map, InitialMapStyle.OFFLINE_ASSET)
-            } else {
+            Log.e(MAP_STYLE_LOG_TAG, "load failure while $styleBeingLoaded: $error")
+            if (styleBeingLoaded == InitialMapStyle.OFFLINE_ASSET) {
+                loadedStyle = null
                 locationMessage = "Map unavailable."
             }
         }
         mapView.getMapAsync { map ->
             this.map = map
-            loadMapStyle(map, initialMapStyle(mainViewModel.isValidatedInternetAvailable))
+            val validatedInternet = mainViewModel.isValidatedInternetAvailable
+            Log.i(MAP_STYLE_LOG_TAG, "validatedInternet=$validatedInternet")
+            loadMapStyle(map, initialMapStyle(validatedInternet))
             map.uiSettings.isLogoEnabled = true
             map.uiSettings.isAttributionEnabled = true
             map.uiSettings.isCompassEnabled = true
@@ -165,8 +162,12 @@ class MainActivity : ComponentActivity() {
 
     private fun loadMapStyle(map: MapLibreMap, choice: InitialMapStyle) {
         styleBeingLoaded = choice
+        Log.i(MAP_STYLE_LOG_TAG, "requesting $choice ${choice.uri}")
         map.setStyle(choice.uri) { style ->
-            if (styleBeingLoaded == choice) onStyleReady(map, style)
+            if (styleBeingLoaded == choice) {
+                Log.i(MAP_STYLE_LOG_TAG, "$choice style callback completed")
+                onStyleReady(map, style)
+            }
         }
     }
 

@@ -456,6 +456,26 @@ Phase 8A two-style regression repair (2026-09-01):
 - `.\gradlew.bat assembleDebug`: PASS
 - online and airplane-mode physical verification: pending
 
+Online Liberty fallback diagnostic correction (2026-09-01):
+- removed automatic `ONLINE_LIBERTY` to `OFFLINE_ASSET` replacement from
+  `addOnDidFailLoadingMapListener`, so an online map-load error can no longer be
+  hidden behind the beige offline style
+- fresh validated-online startup still requests exactly
+  `https://tiles.openfreemap.org/styles/liberty`; fresh offline startup still
+  requests `asset://map/offline.json`, with no live connectivity switching
+- `CngMapStyle` now logs the startup validated-internet value, requested style
+  mode and URI, successful setStyle callback, and full failure message with the
+  current requested mode
+- MapLibre Android 13.3.1 maps this listener to native
+  `onDidFailLoadingMap(MapLoadError, message)`; native categories are style
+  parse/load, not-found, or unknown errors, but the Android callback exposes only
+  the message. Tile, glyph, and sprite events use separate listener APIs.
+- total unit tests: 103 PASS
+- `.\gradlew.bat test`: PASS
+- `.\gradlew.bat assembleDebug`: PASS
+- online Liberty physical restoration and the exact device failure message:
+  pending device verification
+
 ## Important discoveries
 
 - MapLibre Android 13.x uses Vulkan for `org.maplibre.gl:android-sdk`; the explicit OpenGL artifact is `org.maplibre.gl:android-sdk-opengl:13.3.1`.

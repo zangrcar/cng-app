@@ -371,6 +371,18 @@ Route/projection concurrency correction (2026-09-01):
 - `.\gradlew.bat test`: PASS
 - `.\gradlew.bat assembleDebug`: PASS
 
+Offline route-loading state correction (2026-09-01):
+- an offline route attempt now clears the cancelled route job reference and
+  resets route loading after advancing `routeRequestId`, preventing an older
+  request's calculating state from remaining visible indefinitely
+- the existing active route, stations, and station-only projection state remain
+  unchanged; no OSRM request starts
+- endpoint-count validation remains before request cancellation and correctly
+  leaves an existing valid request untouched
+- total unit tests: 101 PASS
+- `.\gradlew.bat test`: PASS
+- `.\gradlew.bat assembleDebug`: PASS
+
 ## Important discoveries
 
 - MapLibre Android 13.x uses Vulkan for `org.maplibre.gl:android-sdk`; the explicit OpenGL artifact is `org.maplibre.gl:android-sdk-opengl:13.3.1`.

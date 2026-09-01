@@ -227,6 +227,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         routeJob?.cancel()
         val requestId = ++routeRequestId
         if (!online.value) {
+            routeJob = null
+            _isRouteLoading.value = false
             _messages.tryEmit("Route unavailable. Try again.")
             return true
         }

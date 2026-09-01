@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
         if (permissions.values.any { it }) {
             enableLocationAndCenter(showWaiting = true, forceCenter = true)
         } else if (routeLocationRequest) {
-            routeLocationRequest = false
+            clearPendingLocationRequest()
             mainViewModel.setQuickSearchError("Location permission is required.")
         } else locationMessage = "Location permission is needed to show your current position."
     }
@@ -71,11 +71,7 @@ class MainActivity : ComponentActivity() {
                 requestingCenterLocation = false
                 map?.locationComponent?.locationEngine?.removeLocationUpdates(this)
                 map?.locationComponent?.forceLocationUpdate(location)
-                if (routeLocationRequest) {
-                    routeLocationRequest = false
-                    centerWhenLocationArrives = false
-                    mainViewModel.navigateFrom(RouteEndpoint("My location", location.latitude, location.longitude, true))
-                } else if (centerWhenLocationArrives) centerMapOn(location)
+                handleResolvedLocation(location)
             } else {
                 requestLocationUpdate()
             }
@@ -84,7 +80,7 @@ class MainActivity : ComponentActivity() {
         override fun onFailure(exception: Exception) {
             requestingCenterLocation = false
             if (routeLocationRequest) {
-                routeLocationRequest = false
+                clearPendingLocationRequest()
                 mainViewModel.setQuickSearchError("Current location unavailable.")
             } else locationMessage = "Waiting for location…"
         }
@@ -241,7 +237,7 @@ class MainActivity : ComponentActivity() {
                 centerWhenLocationArrives = true
                 val location = locationComponent.lastKnownLocation
                 if (location != null) {
-                    centerMapOn(location)
+                    handleResolvedLocation(location)
                 } else {
                     if (showWaiting) locationMessage = "Waiting for location…"
                     requestingCenterLocation = false
@@ -249,13 +245,23 @@ class MainActivity : ComponentActivity() {
                 }
             }
         } catch (_: SecurityException) {
-            locationMessage = "Location permission is needed to show your current position."
+            if (routeLocationRequest) {
+                clearPendingLocationRequest()
+                mainViewModel.setQuickSearchError("Location permission is required.")
+            } else locationMessage = "Location permission is needed to show your current position."
         }
     }
 
     private fun requestLocationUpdate() {
         if (requestingCenterLocation || !hasForegroundLocationPermission()) return
-        val engine = map?.locationComponent?.locationEngine ?: return
+        val engine = map?.locationComponent?.locationEngine
+        if (engine == null) {
+            val wasRouteRequest = routeLocationRequest
+            clearPendingLocationRequest()
+            if (wasRouteRequest) mainViewModel.setQuickSearchError("Current location unavailable.")
+            else locationMessage = "Waiting for location…"
+            return
+        }
         requestingCenterLocation = true
         try {
             engine.requestLocationUpdates(
@@ -266,7 +272,9 @@ class MainActivity : ComponentActivity() {
                 Looper.getMainLooper()
             )
         } catch (_: SecurityException) {
-            requestingCenterLocation = false
+            val wasRouteRequest = routeLocationRequest
+            clearPendingLocationRequest()
+            if (wasRouteRequest) mainViewModel.setQuickSearchError("Current location unavailable.")
         }
     }
 
@@ -307,7 +315,8 @@ class MainActivity : ComponentActivity() {
         }
         val location = map?.locationComponent?.lastKnownLocation
         if (location != null) {
-            mainViewModel.navigateFrom(RouteEndpoint("My location", location.latitude, location.longitude, true))
+            routeLocationRequest = true
+            handleResolvedLocation(location)
         } else {
             routeLocationRequest = true
             mainViewModel.setQuickSearchError("Current location unavailable.")
@@ -317,10 +326,25 @@ class MainActivity : ComponentActivity() {
 
     private fun cancelRouteLocationRequest() {
         if (!routeLocationRequest) return
+        clearPendingLocationRequest()
+    }
+
+    private fun clearPendingLocationRequest() {
         routeLocationRequest = false
         requestingCenterLocation = false
         centerWhenLocationArrives = false
         map?.locationComponent?.locationEngine?.removeLocationUpdates(centerLocationCallback)
+    }
+
+    private fun handleResolvedLocation(location: Location) {
+        when (resolvedLocationAction(routeLocationRequest, centerWhenLocationArrives)) {
+            ResolvedLocationAction.ROUTE -> {
+                clearPendingLocationRequest()
+                mainViewModel.navigateFrom(RouteEndpoint("My location", location.latitude, location.longitude, true))
+            }
+            ResolvedLocationAction.CENTER -> centerMapOn(location)
+            ResolvedLocationAction.NONE -> Unit
+        }
     }
 
     private fun fitRoute(points: List<com.zangrcar.cngitaly.data.routing.GeoPoint>) {

@@ -1,7 +1,6 @@
 package com.zangrcar.cngitaly.ui.map
 
 import android.graphics.Color
-import android.util.Log
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
@@ -41,7 +40,6 @@ class StationMapLayer(
         val featureCollection = stations.toFeatureCollection()
         val source = map.style?.getSourceAs<GeoJsonSource>(SOURCE_ID)
         if (source == null) {
-            Log.d(LOG_TAG, "Station source unavailable in current style")
             return false
         }
         source.setGeoJson(featureCollection)
@@ -137,7 +135,6 @@ class StationMapLayer(
     }
 
     companion object {
-        private const val LOG_TAG = "CngMap"
         private const val SOURCE_ID = "cng-stations"
         private const val CLUSTER_CIRCLE_LAYER_ID = "cng-clusters"
         private const val CLUSTER_COUNT_LAYER_ID = "cng-cluster-count"

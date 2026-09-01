@@ -78,6 +78,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val quickSearch = _quickSearch.asStateFlow()
     private var routeJob: Job? = null
     private var routeRequestId = 0L
+    private var stationProjectionJob: Job? = null
+    private val stationProjectionGuard = StationProjectionGuard()
     private val _routeCorridorSetting = MutableStateFlow<RouteCorridorSetting>(RouteCorridorSetting.Auto)
     val routeCorridorSetting = _routeCorridorSetting.asStateFlow()
     private val _searchedPlaceMarker = MutableStateFlow<PlaceSearchResult?>(null)
@@ -86,9 +88,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val activeRoute = _activeRoute.asStateFlow()
     private val _isRouteLoading = MutableStateFlow(false)
     val isRouteLoading = _isRouteLoading.asStateFlow()
-    private val _routeError = MutableStateFlow<String?>(null)
-    val routeError = _routeError.asStateFlow()
-
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val messages = _messages.asSharedFlow()
     val uiState = combine(
@@ -123,12 +122,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             refreshing.value = true
             try {
                 repository.refresh()
-                val route = _activeRoute.value
-                if (route != null) {
-                    _stations.value = repository.getStationsNearRoute(route.points, route.distanceMeters, _routeCorridorSetting.value)
-                } else {
-                    _stations.value = repository.getAllStations()
-                }
+                recomputeStations()
                 if (showSuccessMessage) _messages.emit("Station data refreshed.")
             } catch (_: Exception) {
                 _messages.emit("Refresh failed. Keeping existing station data.")
@@ -232,16 +226,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (endpoints.size < 2 || endpoints.size > 10) return false
         routeJob?.cancel()
         val requestId = ++routeRequestId
-        _routeError.value = null
         if (!online.value) {
             _messages.tryEmit("Route unavailable. Try again.")
             return true
         }
+        stationProjectionJob?.cancel()
+        val stationGeneration = stationProjectionGuard.next()
         routeJob = viewModelScope.launch {
             _isRouteLoading.value = true
             try {
                 val route = osrmClient.route(endpoints)
-                val routeStations = repository.getStationsNearRoute(route.points, route.distanceMeters, _routeCorridorSetting.value)
+                val corridor = _routeCorridorSetting.value
+                val routeStations = repository.getStationsNearRoute(route.points, route.distanceMeters, corridor)
+                if (requestId != routeRequestId ||
+                    !stationProjectionGuard.isCurrent(stationGeneration) ||
+                    corridor != _routeCorridorSetting.value
+                ) return@launch
                 _activeRoute.value = route
                 _stations.value = routeStations
                 val marker = _searchedPlaceMarker.value
@@ -259,9 +259,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setRouteCorridor(setting: RouteCorridorSetting) {
         _routeCorridorSetting.value = setting
-        _activeRoute.value?.let { route -> viewModelScope.launch {
-            _stations.value = repository.getStationsNearRoute(route.points, route.distanceMeters, setting)
-        } }
+        routeJob?.cancel()
+        routeRequestId++
+        routeJob = null
+        _isRouteLoading.value = false
+        recomputeStations()
     }
 
     fun setSearchedPlaceMarker(place: PlaceSearchResult?) { _searchedPlaceMarker.value = place }
@@ -272,8 +274,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         routeJob = null
         _isRouteLoading.value = false
         _activeRoute.value = null
-        _routeError.value = null
-        viewModelScope.launch { loadAllStations() }
+        recomputeStations()
     }
 
     override fun onCleared() {
@@ -286,10 +287,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private suspend fun loadAllStations() {
-        try {
-            _stations.value = repository.getAllStations()
-        } catch (_: Exception) {
-            _messages.emit("Unable to load local station data.")
+        recomputeStations()
+    }
+
+    private fun recomputeStations() {
+        stationProjectionJob?.cancel()
+        val generation = stationProjectionGuard.next()
+        val route = _activeRoute.value
+        val corridor = _routeCorridorSetting.value
+        stationProjectionJob = viewModelScope.launch {
+            try {
+                val result = if (route == null) repository.getAllStations()
+                else repository.getStationsNearRoute(route.points, route.distanceMeters, corridor)
+                val modeStillMatches = if (route == null) _activeRoute.value == null
+                else _activeRoute.value === route && _routeCorridorSetting.value == corridor
+                if (stationProjectionGuard.isCurrent(generation) && modeStillMatches) {
+                    _stations.value = result
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (_: Exception) {
+                _messages.emit("Unable to load local station data.")
+            }
         }
     }
 

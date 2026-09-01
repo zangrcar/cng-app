@@ -156,14 +156,8 @@ Route mode supports an ordered From -> zero or more Stops -> To route (up to
 eight intermediate stops). Stops are visited exactly in their displayed order;
 the app never optimizes or reorders them.
 
-A can be:
-- current location;
-- searched place;
-- location chosen on map.
-
-B can be:
-- searched place;
-- location chosen on map.
+The origin can be the current location or a Photon search result. The
+destination and intermediate stops are selected from Photon search results.
 
 OSRM will be used for routing.
 

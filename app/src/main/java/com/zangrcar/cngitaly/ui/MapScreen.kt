@@ -94,8 +94,6 @@ import com.zangrcar.cngitaly.data.mimit.openingHoursLabel
 import com.zangrcar.cngitaly.data.geocoding.PlaceSearchResult
 import com.zangrcar.cngitaly.data.routing.RouteEndpoint
 import com.zangrcar.cngitaly.data.routing.RouteResult
-import com.zangrcar.cngitaly.data.routing.RoutePointDraft
-import com.zangrcar.cngitaly.data.routing.RoutePointRole
 import com.zangrcar.cngitaly.data.routing.RouteCorridorSetting
 import kotlinx.coroutines.launch
 import org.maplibre.android.maps.MapView

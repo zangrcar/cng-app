@@ -2,7 +2,18 @@
 
 ## Current state
 
-Native Android baseline created and verified.
+The native Android app currently uses one almost-full-screen MapLibre map with
+all locally stored Italian CNG stations in normal mode. There is no dedicated
+route button and no Search this area action.
+
+Current navigation flow is destination-first: Photon typeahead selection places
+one temporary marker and exposes Navigate; choosing a Photon origin or My
+location calculates immediately. An active route exposes quick Add Stop, while
+the main drawer owns full ordered route editing and the Auto/3/5/10/20 km
+corridor setting. The GPS locator moves only the camera and preserves any active
+route. Route mode projects only stations within the selected geometric corridor.
+
+Offline maps and Slovenia support are not implemented.
 
 Branch:
 android-native
@@ -29,7 +40,7 @@ android-native
 - [ ] 7. Ordered route mode + stations along route (7A/7B implemented; physical verification pending)
 - [ ] 8. Offline/polish/testing on real phone
 
-## Current task
+## Implementation history
 
 Phase 1 and Phase 2 are complete and manually verified on a physical device.
 
@@ -324,6 +335,27 @@ Phase 7 fast search/navigation UX simplification (2026-09-01):
 - `\.\gradlew.bat test`: PASS
 - `\.\gradlew.bat assembleDebug`: PASS
 - physical-device verification: pending
+
+Technical stability/cleanup pass (2026-09-01):
+- centralized asynchronous station projection behind one replaceable job and a
+  monotonic generation guard; commits additionally validate normal/route mode,
+  active route identity, and corridor setting
+- route replacement reserves the newest station generation and commits the new
+  route only after OSRM and matching corridor-station filtering both succeed;
+  cancellation and failures preserve the previous route and station projection
+- unified immediate/callback location resolution so a pending My location route
+  request takes priority after permission grant, while ordinary locator requests
+  remain camera-only; denial, dismissal, engine failure, and security failures
+  clear pending flags and updates
+- removed unused Phase 7B route draft types/actions/tests, unused routeError
+  state/imports, and the low-value missing-source debug log
+- retained the persistent clustered source, route/place layers, interactions,
+  and all three required `Noto Sans Regular` SymbolLayer font declarations
+- replaced obsolete draft tests with current QuickRouteActions coverage and
+  added pure station-generation/location-decision tests
+- total unit tests: 99 PASS
+- `.\gradlew.bat test`: PASS
+- `.\gradlew.bat assembleDebug`: PASS
 
 ## Important discoveries
 

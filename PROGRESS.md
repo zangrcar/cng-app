@@ -14,8 +14,11 @@ corridor setting. The GPS locator moves only the camera and preserves any active
 route. Route mode projects only stations within the selected geometric corridor.
 
 Phase 8A uses the original remote Liberty style online and a separate minimal
-bundled style with app-owned marker glyphs offline. Detailed offline basemap data,
-download support, and Slovenia support are not implemented.
+bundled style with app-owned marker glyphs offline. The Phase 8B application
+foundation can also load an installed `filesDir/maps/italy.pmtiles` through a
+simple Protomaps-compatible local style. No Italy archive or download source/UI
+is included yet; physical offline-basemap rendering and Slovenia support remain
+pending.
 
 Branch:
 android-native
@@ -41,7 +44,7 @@ android-native
 - [x] 6. Search for another place
 - [x] 7. Ordered route mode + stations along route (technically complete)
 - [x] 8A. Offline-safe style and app-owned overlays (glyph fix physical verification pending)
-- [ ] 8B. Downloadable full offline basemap
+- [ ] 8B. Downloadable full offline basemap (application-side PMTiles foundation implemented; archive/download pending)
 - [ ] 8C. Remaining polish/testing on real phone
 
 ## Implementation history
@@ -494,6 +497,32 @@ Lifecycle-aware map style selection (2026-09-01):
 - `.\gradlew.bat test`: PASS
 - `.\gradlew.bat assembleDebug`: PASS
 - physical connectivity transition verification: pending
+
+Phase 8B application-side PMTiles foundation (2026-09-01):
+- added three-way map selection: validated internet always uses unchanged remote
+  Liberty; offline uses an installed Italy PMTiles archive when present and the
+  existing minimal background otherwise
+- canonical archive location is `filesDir/maps/italy.pmtiles`; MapLibre receives
+  the native `pmtiles://file://<absolute-path>` source URL without another PMTiles
+  library or an embedded HTTP server
+- added a storage-only offline map manager for existence, size, optional version
+  metadata, same-directory staged/atomic replacement, and deletion
+- added a runtime-substituted local style template explicitly targeting the
+  Protomaps `earth`, `water`, `roads`, `boundaries`, and `places` source layers;
+  it provides a deliberately simple basemap and reuses local Noto glyphs
+- all three styles continue through the same style-ready path, restoring current
+  station, route, place, and location layers without camera reset or route/data
+  refresh
+- no archive, production download URL, or download UI was added; intended archive
+  production is Geofabrik Italy OSM PBF -> Protomaps basemap/Planetiler -> PMTiles,
+  and physical-device rendering remains pending
+- added focused mode-selection, template-schema, PMTiles URI, installation
+  metadata, size, and deletion tests
+- total unit tests: 108 PASS
+- `.\gradlew.bat test`: PASS
+- `.\gradlew.bat assembleDebug`: PASS
+- verified the debug APK packages the PMTiles style template, minimal style, and
+  both required local Noto glyph ranges
 
 ## Important discoveries
 

@@ -1,0 +1,71 @@
+{
+  "version": 8,
+  "name": "CNG Italy Offline PMTiles",
+  "glyphs": "asset://map/glyphs/{fontstack}/{range}.pbf",
+  "sources": {
+    "protomaps": {
+      "type": "vector",
+      "url": "__ITALY_PMTILES_URL__"
+    }
+  },
+  "layers": [
+    {
+      "id": "offline-background",
+      "type": "background",
+      "paint": { "background-color": "#e5e8e2" }
+    },
+    {
+      "id": "offline-earth",
+      "type": "fill",
+      "source": "protomaps",
+      "source-layer": "earth",
+      "paint": { "fill-color": "#e5e8e2" }
+    },
+    {
+      "id": "offline-water",
+      "type": "fill",
+      "source": "protomaps",
+      "source-layer": "water",
+      "paint": { "fill-color": "#a8c8d8" }
+    },
+    {
+      "id": "offline-boundaries",
+      "type": "line",
+      "source": "protomaps",
+      "source-layer": "boundaries",
+      "paint": { "line-color": "#9a9a91", "line-width": 1.0, "line-dasharray": [3, 2] }
+    },
+    {
+      "id": "offline-minor-roads",
+      "type": "line",
+      "source": "protomaps",
+      "source-layer": "roads",
+      "paint": { "line-color": "#ffffff", "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.3, 14, 2.0] }
+    },
+    {
+      "id": "offline-major-roads",
+      "type": "line",
+      "source": "protomaps",
+      "source-layer": "roads",
+      "filter": ["in", ["get", "pmap:kind"], ["literal", ["highway", "major_road"]]],
+      "paint": { "line-color": "#f2c879", "line-width": ["interpolate", ["linear"], ["zoom"], 5, 0.8, 14, 4.0] }
+    },
+    {
+      "id": "offline-places",
+      "type": "symbol",
+      "source": "protomaps",
+      "source-layer": "places",
+      "minzoom": 5,
+      "layout": {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": 12
+      },
+      "paint": {
+        "text-color": "#4a4a45",
+        "text-halo-color": "#f4f3ed",
+        "text-halo-width": 1
+      }
+    }
+  ]
+}

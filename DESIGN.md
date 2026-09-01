@@ -289,9 +289,25 @@ Photon place search, OSRM routing, MIMIT refresh/live enrichment, and uncached
 OpenFreeMap basemap resources remain online-only and fail without deleting valid
 local data or an active route.
 
-A downloadable full offline basemap is future Phase 8B work, pending selection
-of a suitable tile/package source and compatible usage terms. Phase 8A does not
-download or bundle Italy vector tiles.
+Phase 8B's application foundation supports a separately produced Italy PMTiles
+archive at `filesDir/maps/italy.pmtiles`. Map selection has three states:
+validated internet uses unchanged remote Liberty; offline with that file uses a
+local Protomaps-schema vector style and MapLibre Native's
+`pmtiles://file://...` support; offline without it retains the minimal bundled
+background. Every style receives the same app-owned overlay and location layers.
+
+The PMTiles style is intentionally simple: land, water, roads, boundaries, and
+place labels. Its source-layer names explicitly target the Protomaps basemap
+schema rather than reusing incompatible Liberty layers. Roads and water do not
+depend on glyph availability; place labels currently require the locally bundled
+`Noto Sans Regular` ranges that cover ordinary Latin text.
+
+No Italy archive, download URL, or production download UI is included yet, so a
+true offline basemap is not complete or physically verified. The intended
+redistribution-safe artifact pipeline is Geofabrik Italy OSM PBF -> Protomaps
+basemap/Planetiler -> `italy.pmtiles`; it must not scrape OpenFreeMap. Production
+packaging should not rely on `pmtiles extract` until the known MapLibre Android
+empty-archive behavior has been ruled out for the produced file.
 
 ## Architecture principles
 

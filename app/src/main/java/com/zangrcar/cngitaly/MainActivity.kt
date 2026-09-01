@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.zangrcar.cngitaly.data.geocoding.PlaceSearchResult
+import com.zangrcar.cngitaly.data.offline.OfflineMapManager
 import com.zangrcar.cngitaly.ui.MapScreen
 import com.zangrcar.cngitaly.ui.map.StationMapLayer
 import com.zangrcar.cngitaly.ui.map.RouteMapLayer
@@ -56,6 +57,7 @@ class MainActivity : ComponentActivity() {
     private var placeWaypointMapLayer: PlaceWaypointMapLayer? = null
     private var routeLocationRequest = false
     private val styleRequests = MapStyleRequestTracker()
+    private val offlineMapManager by lazy { OfflineMapManager(filesDir) }
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -99,7 +101,7 @@ class MainActivity : ComponentActivity() {
         mapView.addOnDidFailLoadingMapListener { error ->
             val requested = styleRequests.requestedStyle
             Log.e(MAP_STYLE_LOG_TAG, "load failure while $requested: $error")
-            if (requested == InitialMapStyle.OFFLINE_ASSET) {
+            if (requested != InitialMapStyle.ONLINE_LIBERTY) {
                 loadedStyle = null
                 locationMessage = "Map unavailable."
             }
@@ -131,7 +133,10 @@ class MainActivity : ComponentActivity() {
                 mainViewModel.validatedInternet
                     .collect { validatedInternet ->
                         Log.i(MAP_STYLE_LOG_TAG, "validatedInternet=$validatedInternet")
-                        val desired = initialMapStyle(validatedInternet)
+                        val desired = initialMapStyle(
+                            validatedInternet = validatedInternet,
+                            hasItalyPmtiles = offlineMapManager.hasItalyMap
+                        )
                         Log.i(MAP_STYLE_LOG_TAG, "desired $desired")
                         styleRequests.updateDesired(desired)
                         applyDesiredStyleIfPossible()
@@ -176,13 +181,27 @@ class MainActivity : ComponentActivity() {
     private fun applyDesiredStyleIfPossible() {
         val map = map ?: return
         val request = styleRequests.nextRequest() ?: return
-        Log.i(MAP_STYLE_LOG_TAG, "requesting ${request.style} ${request.style.uri}")
-        map.setStyle(request.style.uri) { style ->
+        val styleBuilder = when (request.style) {
+            InitialMapStyle.ONLINE_LIBERTY,
+            InitialMapStyle.OFFLINE_MINIMAL -> Style.Builder().fromUri(request.style.uri)
+            InitialMapStyle.OFFLINE_PMTILES -> Style.Builder().fromJson(pmtilesStyleJson())
+        }
+        val description = if (request.style == InitialMapStyle.OFFLINE_PMTILES) {
+            offlineMapManager.italyMapUri()
+        } else {
+            request.style.uri
+        }
+        Log.i(MAP_STYLE_LOG_TAG, "requesting ${request.style} $description")
+        map.setStyle(styleBuilder) { style ->
             if (!styleRequests.isAuthoritative(request)) return@setStyle
             Log.i(MAP_STYLE_LOG_TAG, "loaded ${request.style}")
             onStyleReady(map, style)
         }
     }
+
+    private fun pmtilesStyleJson(): String =
+        assets.open(MapAssets.OFFLINE_PMTILES_STYLE_TEMPLATE).bufferedReader().use { it.readText() }
+            .replace(MapAssets.PMTILES_URL_PLACEHOLDER, offlineMapManager.italyMapUri())
 
     private fun onStyleReady(map: MapLibreMap, style: Style) {
         val isFirstLoadedStyle = loadedStyle == null

@@ -2,7 +2,9 @@ package com.zangrcar.cngitaly
 
 internal object MapAssets {
     const val ONLINE_STYLE_URI = "https://tiles.openfreemap.org/styles/liberty"
-    const val OFFLINE_STYLE_URI = "asset://map/offline.json"
+    const val OFFLINE_MINIMAL_STYLE_URI = "asset://map/offline.json"
+    const val OFFLINE_PMTILES_STYLE_TEMPLATE = "map/offline_pmtiles.json.template"
+    const val PMTILES_URL_PLACEHOLDER = "__ITALY_PMTILES_URL__"
     const val GLYPHS_URI = "asset://map/glyphs/{fontstack}/{range}.pbf"
 
     val requiredGlyphAssets = listOf(
@@ -13,11 +15,18 @@ internal object MapAssets {
 
 internal enum class InitialMapStyle(val uri: String) {
     ONLINE_LIBERTY(MapAssets.ONLINE_STYLE_URI),
-    OFFLINE_ASSET(MapAssets.OFFLINE_STYLE_URI)
+    OFFLINE_PMTILES(""),
+    OFFLINE_MINIMAL(MapAssets.OFFLINE_MINIMAL_STYLE_URI)
 }
 
-internal fun initialMapStyle(validatedInternet: Boolean): InitialMapStyle =
-    if (validatedInternet) InitialMapStyle.ONLINE_LIBERTY else InitialMapStyle.OFFLINE_ASSET
+internal fun initialMapStyle(
+    validatedInternet: Boolean,
+    hasItalyPmtiles: Boolean
+): InitialMapStyle = when {
+    validatedInternet -> InitialMapStyle.ONLINE_LIBERTY
+    hasItalyPmtiles -> InitialMapStyle.OFFLINE_PMTILES
+    else -> InitialMapStyle.OFFLINE_MINIMAL
+}
 
 internal data class MapStyleRequest(val style: InitialMapStyle, val generation: Long)
 

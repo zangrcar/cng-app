@@ -357,6 +357,20 @@ Technical stability/cleanup pass (2026-09-01):
 - `.\gradlew.bat test`: PASS
 - `.\gradlew.bat assembleDebug`: PASS
 
+Route/projection concurrency correction (2026-09-01):
+- route startup still cancels the current station-only projection and advances
+  its generation once so that projection cannot commit
+- station-only generation changes after route startup, including those caused
+  by successful MIMIT refresh, no longer invalidate the route transaction
+- route commit eligibility now depends only on the newest `routeRequestId` and
+  the corridor used for filtering still being current; OSRM and station
+  filtering must both succeed before route/stations commit
+- added focused tests separating station-projection generation from route
+  transaction identity and retaining newer-request/corridor invalidation
+- total unit tests: 101 PASS
+- `.\gradlew.bat test`: PASS
+- `.\gradlew.bat assembleDebug`: PASS
+
 ## Important discoveries
 
 - MapLibre Android 13.x uses Vulkan for `org.maplibre.gl:android-sdk`; the explicit OpenGL artifact is `org.maplibre.gl:android-sdk-opengl:13.3.1`.

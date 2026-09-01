@@ -1,5 +1,6 @@
 package com.zangrcar.cngitaly
 
+import com.zangrcar.cngitaly.data.routing.RouteCorridorSetting
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -31,12 +32,24 @@ class StationProjectionGuardTest {
         assertTrue(guard.isCurrent(route))
     }
 
-    @Test fun `new route request invalidates old route request`() {
+    @Test fun `station projection generation changes do not invalidate current route request`() {
         val guard = StationProjectionGuard()
-        val oldRoute = guard.next()
-        val newRoute = guard.next()
-        assertFalse(guard.isCurrent(oldRoute))
-        assertTrue(guard.isCurrent(newRoute))
+        guard.next()
+        guard.next()
+        assertTrue(routeRequestIsCurrent(7L, 7L, RouteCorridorSetting.Auto, RouteCorridorSetting.Auto))
+    }
+
+    @Test fun `newer route request id invalidates old route request`() {
+        assertFalse(routeRequestIsCurrent(7L, 8L, RouteCorridorSetting.Auto, RouteCorridorSetting.Auto))
+    }
+
+    @Test fun `corridor change invalidates route filtered with old corridor`() {
+        assertFalse(routeRequestIsCurrent(
+            7L,
+            7L,
+            RouteCorridorSetting.Fixed(3_000.0),
+            RouteCorridorSetting.Fixed(20_000.0)
+        ))
     }
 
     @Test fun `pending route location takes priority over camera centering`() {

@@ -231,16 +231,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return true
         }
         stationProjectionJob?.cancel()
-        val stationGeneration = stationProjectionGuard.next()
+        stationProjectionGuard.next()
         routeJob = viewModelScope.launch {
             _isRouteLoading.value = true
             try {
                 val route = osrmClient.route(endpoints)
                 val corridor = _routeCorridorSetting.value
                 val routeStations = repository.getStationsNearRoute(route.points, route.distanceMeters, corridor)
-                if (requestId != routeRequestId ||
-                    !stationProjectionGuard.isCurrent(stationGeneration) ||
-                    corridor != _routeCorridorSetting.value
+                if (!routeRequestIsCurrent(
+                        requestId = requestId,
+                        currentRequestId = routeRequestId,
+                        filteredCorridor = corridor,
+                        currentCorridor = _routeCorridorSetting.value
+                    )
                 ) return@launch
                 _activeRoute.value = route
                 _stations.value = routeStations

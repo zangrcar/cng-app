@@ -524,6 +524,39 @@ Phase 8B application-side PMTiles foundation (2026-09-01):
 - verified the debug APK packages the PMTiles style template, minimal style, and
   both required local Noto glyph ranges
 
+Phase 8B developer archive pipeline (2026-09-01):
+- added `tools/offline-map/build-italy-map.ps1`, which checks Git, Java 21+, and
+  Maven; pins the official `protomaps/basemaps` revision; builds its Planetiler
+  profile; and directly generates `build/offline/italy.pmtiles` from Geofabrik
+  Italy data without `pmtiles extract`
+- the build supports a same-schema `-Region NordEst` proof archive using
+  Geofabrik `italy/nord-est`, keeps its checkout/source cache under ignored
+  `build/offline`, rejects missing or under-10 MiB output, and automatically runs
+  `pmtiles show --metadata` plus `pmtiles verify` when that optional CLI exists
+- validated the pinned official basemaps source: its documented build flags and
+  nested Geofabrik area handling match the script, and its profile defines the
+  style's `earth`, `water`, `roads`, `boundaries`, and `places` source layers;
+  its road classification also retains `pm:kind` values `highway` and
+  `major_road`
+- added `tools/offline-map/install-italy-map.ps1`, which requires the generated
+  archive and one selected authorized device, verifies debug `run-as`, stages
+  through `/data/local/tmp`, atomically replaces `files/maps/italy.pmtiles`,
+  compares byte sizes, lists the installed file, and removes the temporary file
+- the offline vector source now carries visible `Protomaps © OpenStreetMap`
+  attribution, and `CngMapStyle` logs the absolute Italy archive path, existence,
+  and byte size whenever validated connectivity becomes offline
+- documented prerequisites, full-Italy/Nord-Est commands, metadata checks,
+  installation, logging, and physical test boundaries in
+  `tools/offline-map/README.md`
+- PowerShell parser checks for both scripts: PASS
+- total unit tests: 108 PASS
+- `\.\gradlew.bat test`: PASS
+- `\.\gradlew.bat assembleDebug`: PASS
+- the large map-data build was not run in this environment; `pmtiles` and `adb`
+  are also unavailable for the requested archive verification and installation
+- real archive metadata and physical-device rendering remain pending, so Phase
+  8B is not complete
+
 ## Important discoveries
 
 - MapLibre Android 13.x uses Vulkan for `org.maplibre.gl:android-sdk`; the explicit OpenGL artifact is `org.maplibre.gl:android-sdk-opengl:13.3.1`.

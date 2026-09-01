@@ -133,6 +133,14 @@ class MainActivity : ComponentActivity() {
                 mainViewModel.validatedInternet
                     .collect { validatedInternet ->
                         Log.i(MAP_STYLE_LOG_TAG, "validatedInternet=$validatedInternet")
+                        if (!validatedInternet) {
+                            Log.i(
+                                MAP_STYLE_LOG_TAG,
+                                "offlineMap path=${offlineMapManager.italyMapFile.absolutePath} " +
+                                    "exists=${offlineMapManager.hasItalyMap} " +
+                                    "size=${offlineMapManager.italyMapSizeBytes}"
+                            )
+                        }
                         val desired = initialMapStyle(
                             validatedInternet = validatedInternet,
                             hasItalyPmtiles = offlineMapManager.hasItalyMap

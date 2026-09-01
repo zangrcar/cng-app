@@ -5,7 +5,8 @@
   "sources": {
     "protomaps": {
       "type": "vector",
-      "url": "__ITALY_PMTILES_URL__"
+      "url": "__ITALY_PMTILES_URL__",
+      "attribution": "Protomaps © OpenStreetMap"
     }
   },
   "layers": [

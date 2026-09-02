@@ -31,6 +31,16 @@ class MapAssetsTest {
         listOf("earth", "water", "roads", "boundaries", "places").forEach { sourceLayer ->
             assertTrue(style.contains("\"source-layer\": \"$sourceLayer\""))
         }
+        val layers = JSONObject(style).getJSONArray("layers")
+        listOf("offline-earth", "offline-water").forEach { layerId ->
+            val layer = (0 until layers.length())
+                .map { layers.getJSONObject(it) }
+                .single { it.getString("id") == layerId }
+            assertEquals(
+                "[\"==\",[\"geometry-type\"],\"Polygon\"]",
+                layer.getJSONArray("filter").toString()
+            )
+        }
         val runtimeStyle = style.replace(
             MapAssets.PMTILES_URL_PLACEHOLDER,
             "pmtiles://file:///data/user/0/com.zangrcar.cngitaly/files/maps/italy.pmtiles"

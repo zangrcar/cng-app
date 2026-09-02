@@ -15,3 +15,6 @@
 local.properties
 pmtiles.exe
 .idea/
+build/offline/
+*.pmtiles
+*.osm.pbf

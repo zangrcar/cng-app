@@ -41,6 +41,8 @@ import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -51,6 +53,7 @@ class MainActivity : ComponentActivity() {
     private var hasCenteredOnLocation = false
     private var centerWhenLocationArrives = false
     private var requestingCenterLocation = false
+    private var locationRequestTimeoutJob: Job? = null
     private var locationMessage by mutableStateOf<String?>(null)
     private var stationMapLayer: StationMapLayer? = null
     private var routeMapLayer: RouteMapLayer? = null
@@ -297,6 +300,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        cancelLocationRequestTimeout()
         stationMapLayer?.destroy()
         placeWaypointMapLayer?.destroy()
         map?.locationComponent?.locationEngine?.removeLocationUpdates(centerLocationCallback)
@@ -347,20 +351,34 @@ class MainActivity : ComponentActivity() {
 
             if (forceCenter || (allowAutomaticCenter && !hasCenteredOnLocation)) {
                 centerWhenLocationArrives = true
+                startLocationRequestTimeout()
                 val location = locationComponent.lastKnownLocation
                 if (location != null) {
                     handleResolvedLocation(location)
                 } else {
                     if (showWaiting) locationMessage = "Waiting for location…"
                     requestingCenterLocation = false
-                    locationComponent.locationEngine?.getLastLocation(centerLocationCallback)
+
+                    val engine = locationComponent.locationEngine
+                    if (engine == null) {
+                        reportPendingLocationUnavailable()
+                    } else {
+                        engine.getLastLocation(centerLocationCallback)
+                    }
                 }
             }
         } catch (_: SecurityException) {
-            if (routeLocationRequest) {
-                clearPendingLocationRequest()
-                mainViewModel.setQuickSearchError("Location permission is required.")
-            } else locationMessage = "Location permission is needed to show your current position."
+            val wasRouteRequest = routeLocationRequest
+            clearPendingLocationRequest()
+
+            if (wasRouteRequest) {
+                mainViewModel.setQuickSearchError(
+                    "Location permission is required."
+                )
+            } else {
+                locationMessage =
+                    "Location permission is needed to show your current position."
+            }
         }
     }
 
@@ -422,6 +440,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun centerMapOn(location: Location) {
+        cancelLocationRequestTimeout()
         centerWhenLocationArrives = false
         hasCenteredOnLocation = true
         val map = map ?: return
@@ -482,10 +501,37 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun clearPendingLocationRequest() {
+        cancelLocationRequestTimeout()
         routeLocationRequest = false
         requestingCenterLocation = false
         centerWhenLocationArrives = false
         map?.locationComponent?.locationEngine?.removeLocationUpdates(centerLocationCallback)
+    }
+
+    private fun startLocationRequestTimeout() {
+        locationRequestTimeoutJob?.cancel()
+
+        locationRequestTimeoutJob = lifecycleScope.launch {
+            delay(LOCATION_REQUEST_TIMEOUT_MILLIS)
+
+            locationRequestTimeoutJob = null
+
+            if (
+                locationTimeoutShouldReport(
+                    resolvedLocationAction(
+                        routeLocationRequest,
+                        centerWhenLocationArrives
+                    )
+                )
+            ) {
+                reportPendingLocationUnavailable()
+            }
+        }
+    }
+
+    private fun cancelLocationRequestTimeout() {
+        locationRequestTimeoutJob?.cancel()
+        locationRequestTimeoutJob = null
     }
 
     private fun reportPendingLocationUnavailable() {
@@ -525,5 +571,6 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val HAS_CENTERED_KEY = "has_centered_on_location"
         private const val MAP_STYLE_LOG_TAG = "CngMapStyle"
+        private const val LOCATION_REQUEST_TIMEOUT_MILLIS = 30_000L
     }
 }

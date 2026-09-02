@@ -749,6 +749,16 @@ Phase 8C one-shot location reliability patch:
 - pure failure-decision logic is unit tested; physical Samsung Galaxy S23
   verification remains pending
 
+Phase 8C bounded location-resolution deadline:
+- one total 30-second deadline now bounds last-known lookup plus the optional
+  active high-accuracy location request and is not restarted between phases
+- success, cancellation, and terminal failure cancel the timeout; stale timeout
+  completion cannot report after the pending location action is gone
+- a null LocationEngine during `getLastLocation` now fails immediately, and
+  `enableLocationAndCenter` SecurityException clears pending state consistently
+- the pure timeout decision is unit tested; Samsung Galaxy S23 physical
+  verification remains pending
+
 ## Important discoveries
 
 - MapLibre Android 13.x uses Vulkan for `org.maplibre.gl:android-sdk`; the explicit OpenGL artifact is `org.maplibre.gl:android-sdk-opengl:13.3.1`.

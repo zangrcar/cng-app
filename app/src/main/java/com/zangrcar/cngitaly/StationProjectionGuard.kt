@@ -47,3 +47,7 @@ internal fun locationFailureAction(
     else ->
         LocationFailureAction.REPORT_UNAVAILABLE
 }
+
+internal fun locationTimeoutShouldReport(
+    pendingAction: ResolvedLocationAction
+): Boolean = pendingAction != ResolvedLocationAction.NONE

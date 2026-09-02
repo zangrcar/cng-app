@@ -84,4 +84,22 @@ class StationProjectionGuardTest {
             locationFailureAction(ResolvedLocationAction.NONE, failedActiveUpdate = true)
         )
     }
+
+    @Test fun `location timeout reports only while a location action remains pending`() {
+        assertTrue(
+            locationTimeoutShouldReport(
+                ResolvedLocationAction.ROUTE
+            )
+        )
+        assertTrue(
+            locationTimeoutShouldReport(
+                ResolvedLocationAction.CENTER
+            )
+        )
+        assertFalse(
+            locationTimeoutShouldReport(
+                ResolvedLocationAction.NONE
+            )
+        )
+    }
 }

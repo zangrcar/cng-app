@@ -302,12 +302,13 @@ schema rather than reusing incompatible Liberty layers. Roads and water do not
 depend on glyph availability; place labels currently require the locally bundled
 `Noto Sans Regular` ranges that cover ordinary Latin text.
 
-No Italy archive, download URL, or production download UI is included yet, so a
-true offline basemap is not complete or physically verified. The intended
-redistribution-safe artifact pipeline is Geofabrik Italy OSM PBF -> Protomaps
-basemap/Planetiler -> `italy.pmtiles`; it must not scrape OpenFreeMap. Production
-packaging should not rely on `pmtiles extract` until the known MapLibre Android
-empty-archive behavior has been ruled out for the produced file.
+The redistribution-safe Geofabrik Italy OSM PBF -> pinned Protomaps
+basemap/Planetiler -> PMTiles pipeline has successfully produced the full Italy
+archive. It is locally installed at `filesDir/maps/italy.pmtiles`, and the full
+offline basemap is physically verified on a Samsung Galaxy S23. Local developer
+installation is sufficient for the current personal/travel build; public
+hosting, download/update, and Play Store distribution are deferred until later.
+The pipeline must not scrape OpenFreeMap.
 
 ## Architecture principles
 

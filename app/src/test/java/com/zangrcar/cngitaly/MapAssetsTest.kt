@@ -3,6 +3,7 @@ package com.zangrcar.cngitaly
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.json.JSONObject
@@ -54,6 +55,28 @@ class MapAssetsTest {
             assertTrue("Missing glyph asset: $path", glyph.isFile)
             assertTrue("Empty glyph asset: $path", glyph.length() > 0L)
         }
+    }
+
+    @Test fun `style load failures degrade through offline fallbacks without a loop`() {
+        assertEquals(
+            InitialMapStyle.OFFLINE_PMTILES,
+            mapStyleFallbackAfterLoadFailure(InitialMapStyle.ONLINE_LIBERTY, true)
+        )
+        assertEquals(
+            InitialMapStyle.OFFLINE_MINIMAL,
+            mapStyleFallbackAfterLoadFailure(InitialMapStyle.ONLINE_LIBERTY, false)
+        )
+        assertEquals(
+            InitialMapStyle.OFFLINE_MINIMAL,
+            mapStyleFallbackAfterLoadFailure(InitialMapStyle.OFFLINE_PMTILES, true)
+        )
+        assertEquals(
+            InitialMapStyle.OFFLINE_MINIMAL,
+            mapStyleFallbackAfterLoadFailure(InitialMapStyle.OFFLINE_PMTILES, false)
+        )
+        assertNull(mapStyleFallbackAfterLoadFailure(InitialMapStyle.OFFLINE_MINIMAL, true))
+        assertNull(mapStyleFallbackAfterLoadFailure(InitialMapStyle.OFFLINE_MINIMAL, false))
+        assertNull(mapStyleFallbackAfterLoadFailure(null, true))
     }
 
     @Test fun `latest desired style wins and stale callback is rejected`() {

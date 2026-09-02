@@ -101,7 +101,20 @@ class MainActivity : ComponentActivity() {
         mapView.addOnDidFailLoadingMapListener { error ->
             val requested = styleRequests.requestedStyle
             Log.e(MAP_STYLE_LOG_TAG, "load failure while $requested: $error")
-            if (requested != InitialMapStyle.ONLINE_LIBERTY) {
+
+            val fallback = mapStyleFallbackAfterLoadFailure(
+                failedStyle = requested,
+                hasItalyPmtiles = offlineMapManager.hasItalyMap
+            )
+
+            if (fallback != null) {
+                Log.w(
+                    MAP_STYLE_LOG_TAG,
+                    "falling back from $requested to $fallback"
+                )
+                styleRequests.updateDesired(fallback)
+                applyDesiredStyleIfPossible()
+            } else {
                 loadedStyle = null
                 locationMessage = "Map unavailable."
             }

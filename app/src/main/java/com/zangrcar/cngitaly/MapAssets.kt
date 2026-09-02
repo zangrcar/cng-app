@@ -28,6 +28,24 @@ internal fun initialMapStyle(
     else -> InitialMapStyle.OFFLINE_MINIMAL
 }
 
+internal fun mapStyleFallbackAfterLoadFailure(
+    failedStyle: InitialMapStyle?,
+    hasItalyPmtiles: Boolean
+): InitialMapStyle? = when (failedStyle) {
+    InitialMapStyle.ONLINE_LIBERTY ->
+        if (hasItalyPmtiles) {
+            InitialMapStyle.OFFLINE_PMTILES
+        } else {
+            InitialMapStyle.OFFLINE_MINIMAL
+        }
+
+    InitialMapStyle.OFFLINE_PMTILES ->
+        InitialMapStyle.OFFLINE_MINIMAL
+
+    InitialMapStyle.OFFLINE_MINIMAL,
+    null -> null
+}
+
 internal data class MapStyleRequest(val style: InitialMapStyle, val generation: Long)
 
 internal class MapStyleRequestTracker {

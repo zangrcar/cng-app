@@ -15,10 +15,11 @@ route. Route mode projects only stations within the selected geometric corridor.
 
 Phase 8A uses the original remote Liberty style online and a separate minimal
 bundled style with app-owned marker glyphs offline. The Phase 8B application
-foundation can also load an installed `filesDir/maps/italy.pmtiles` through a
-simple Protomaps-compatible local style. That architecture is physically proven
-with the Ljubljana developer archive, but no production Italy archive or
-end-user download/update UI is included yet.
+foundation loads the full production Italy PMTiles archive locally installed at
+`filesDir/maps/italy.pmtiles` through a simple Protomaps-compatible style. The
+full archive and offline behavior are physically verified on a Samsung Galaxy
+S23; public download and distribution work is deferred for the personal/travel
+build.
 
 Branch:
 android-native
@@ -44,7 +45,7 @@ android-native
 - [x] 6. Search for another place
 - [x] 7. Ordered route mode + stations along route (technically complete)
 - [x] 8A. Offline-safe style and app-owned overlays (glyph fix physical verification pending)
-- [ ] 8B. Downloadable full offline basemap (application-side PMTiles foundation implemented; archive/download pending)
+- [x] 8B. Full Italy offline basemap for personal build (production archive + local installation physically verified; public distribution deferred)
 - [ ] 8C. Remaining polish/testing on real phone
 
 ## Implementation history
@@ -708,6 +709,26 @@ Phase 8B production NordEst proof and mixed-geometry fill correction (2026-09-02
 - `.\gradlew.bat test`: PASS (108 tests)
 - `.\gradlew.bat assembleDebug`: PASS
 - `git diff --check`: PASS
+
+Phase 8B full-Italy production proof:
+- production Italy generation: PASS; canonical archive approximately 2543.7 MiB
+- physical Samsung Galaxy S23 airplane-mode rendering: PASS
+- offline roads/place labels, CNG stations, prices, clusters, station details,
+  and GPS: PASS; visual result accepted by the user
+- local developer installation is the current personal/travel distribution method
+- public hosting, in-app download/update, Play Store distribution, and map-size
+  optimization are deferred until after the personal app is finished
+- full Italy remains locally installed at `filesDir/maps/italy.pmtiles`; Phase 8C
+  trip-readiness and reliability is now active
+
+Map style load-failure fallback patch:
+- preserved normal connectivity-based style selection and added one-direction
+  failure degradation: online Liberty to installed PMTiles or minimal offline,
+  and PMTiles to minimal offline; minimal offline has no further fallback
+- fallback attempts retain the current loaded style and do not show Map unavailable;
+  terminal failure clears the loaded style and reports Map unavailable
+- unit/build verification completed; physical Samsung Galaxy S23 transition
+  testing is pending
 
 Narrow LocationComponent safety patch:
 - removed `pmtiles.exe` from Git tracking and ignored it as a local developer tool

@@ -634,6 +634,81 @@ Phase 8B Ljubljana physical developer proof and installer cleanup (2026-09-02):
 - `.\gradlew.bat test`: PASS
 - `.\gradlew.bat assembleDebug`: PASS
 
+Phase 8B production pipeline hardening (2026-09-02):
+- retained `NordEst` and `Italy` as Geofabrik-only production inputs, including
+  the official `download-ext2` fallback, while leaving the physically proven
+  `LjubljanaTest` developer path available
+- all pinned-profile inputs are now prepared and cached before Planetiler runs:
+  OSM PBF, Natural Earth, water/land polygons, daylight landcover, QRank, and
+  PGF encoding; automatic Planetiler source downloading remains disabled
+- completed inputs are reused and resumable `.partial` files are preserved;
+  conservative size checks now also include format signatures for PBF, ZIP,
+  gzip, and GeoPackage inputs so obviously invalid caches fail clearly
+- a locally available pinned basemaps commit no longer requires a network fetch;
+  the matching Planetiler JAR is still reused, and `-Rebuild` remains the
+  explicit rebuild override
+- generation now targets `italy.pmtiles.building`, checks minimum size and the
+  PMTiles v3 header, runs optional `pmtiles show --metadata` and `pmtiles verify`,
+  and requires metadata IDs `earth`, `water`, `roads`, `boundaries`, and
+  `places` before replacing canonical `build/offline/italy.pmtiles`
+- the installer rejects undersized or non-PMTiles-v3 input before touching the
+  connected device
+- PowerShell parser checks for both offline-map scripts: PASS
+- `.\gradlew.bat test`: PASS (108 tests, tasks up-to-date)
+- `.\gradlew.bat assembleDebug`: PASS
+- the cached Ljubljana artifact headers and cached pinned-profile source headers
+  were inspected successfully; `pmtiles` CLI is unavailable in this environment
+- no production NordEst/Italy download, generation, metadata inspection, PMTiles
+  verification, installation, or physical airplane-mode test was performed here;
+  production artifacts remain physically unverified
+
+Phase 8B NordEst staged-output regression correction (2026-09-02):
+- the first physical production `-Region NordEst` attempt successfully downloaded
+  and cached the 593.5 MiB Geofabrik PBF, reused all support sources and the
+  pinned Planetiler JAR, and reached generation with automatic downloads disabled
+- Planetiler then failed immediately because the staged filename
+  `italy.pmtiles.building` ended in `.building`, which is not a supported archive
+  extension; the repeated `Unexpected token type: START_OBJECT` warnings were
+  not treated as this failure
+- changed only the same-directory staged output to `italy.building.pmtiles`, so
+  Planetiler infers PMTiles while validation still precedes canonical publication
+- added an early runtime invariant requiring the staged output's final extension
+  to be `.pmtiles`; failed generation or validation removes the staged artifact
+  and preserves any existing canonical `build/offline/italy.pmtiles`
+- focused staging-name source check: PASS (`italy.building.pmtiles`, distinct
+  from the canonical archive)
+- PowerShell parser checks for both offline-map scripts: PASS
+- `.\gradlew.bat test`: PASS (108 tests, tasks up-to-date)
+- `.\gradlew.bat assembleDebug`: PASS
+- `git diff --check`: PASS
+- NordEst generation has not yet been rerun successfully or physically verified
+
+Phase 8B production NordEst proof and mixed-geometry fill correction (2026-09-02):
+- production `-Region NordEst` generation: PASS; canonical
+  `build/offline/italy.pmtiles` is 731,451,414 bytes (approximately 697.6 MiB)
+- generated metadata contains the Android-required `earth`, `water`, `roads`,
+  `boundaries`, and `places` layers; `pmtiles verify`: PASS with no errors
+- physical Samsung Galaxy S23 airplane-mode PMTiles rendering: PASS for basemap,
+  roads, place labels, CNG stations, prices, clusters, and app-owned overlays
+- physical testing also found large diagonal/triangular light-blue and grey fill
+  bands at some locations/zooms; offline basemap visual artifact/polish remains
+  pending physical retest
+- pinned profile inspection found that `earth` deliberately mixes land polygons
+  with cliff lines and island label points, while `water` mixes water/ocean
+  polygons with waterway/reef lines and sea/ocean label points
+- the local style had unfiltered fill layers for both mixed-geometry sources;
+  added explicit `geometry-type == Polygon` filters, matching the official
+  Protomaps fill convention and leaving valid earth/water polygons visible
+- added focused asset assertions for both polygon filters and a developer-only,
+  binary-safe Z/X/Y raw MVT extraction script; neither changes production runtime
+- the verified 697.6 MiB archive is unchanged and reusable; only the APK/style
+  needs rebuilding and reinstalling for the physical visual retest
+- focused `MapAssetsTest`: PASS
+- PowerShell parser checks for all three offline-map scripts: PASS
+- `.\gradlew.bat test`: PASS (108 tests)
+- `.\gradlew.bat assembleDebug`: PASS
+- `git diff --check`: PASS
+
 ## Important discoveries
 
 - MapLibre Android 13.x uses Vulkan for `org.maplibre.gl:android-sdk`; the explicit OpenGL artifact is `org.maplibre.gl:android-sdk-opengl:13.3.1`.

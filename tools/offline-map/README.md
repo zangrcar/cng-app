@@ -87,11 +87,17 @@ Planetiler. It prefers Windows BITS for fresh long-running downloads and falls
 back to resumable `curl.exe` GET requests. Planetiler then runs without
 `--download` and consumes those local files.
 
-Completed cached inputs are reused after conservative local size checks.
+Completed cached inputs are reused after conservative local size and format-header
+checks. This includes the OSM PBF, Natural Earth, water/land polygons,
+landcover, QRank, and PGF encoding inputs; all are prepared before Planetiler is
+started, so the generation run does not depend on Planetiler downloading any
+missing source. Invalid completed cache files fail clearly instead of being
+silently consumed.
 Interrupted `.partial` files are retained for a later resumable attempt. The
-separately managed QRank and PGF encoding files are also left in place. Use
-`-Rebuild` only when the Planetiler JAR must be rebuilt despite an unchanged
-pinned basemaps revision.
+same cache paths continue to be used across regions. Use `-Rebuild` only when
+the Planetiler JAR must be rebuilt despite an unchanged pinned basemaps revision.
+If the pinned revision and its built JAR are already cached, neither is fetched
+or rebuilt unnecessarily.
 
 If the primary `https://download.geofabrik.de` OSM download fails because of a
 timeout, network error, or HTTP failure such as service overload, the script
@@ -112,10 +118,28 @@ roads and the Ljubljana place label while GPS and local CNG station overlays,
 prices, and clusters remained visible. This proves the Android PMTiles path; it
 does not make LjubljanaTest a production Italy dataset.
 
+The production NordEst path has also completed successfully. Its canonical
+archive is 731,451,414 bytes (approximately 697.6 MiB), contains all five source
+layers required by the Android style, and passes `pmtiles verify`. A Samsung
+Galaxy S23 loaded it successfully in airplane mode with roads, place labels,
+CNG stations, prices, clusters, and app overlays. The first visual pass exposed
+diagonal blue/grey artifacts from unfiltered fill styling of Protomaps' mixed-
+geometry `earth` and `water` layers. The Android style now restricts those fills
+to polygon geometry; physical confirmation of that visual correction remains
+pending. This style-only correction does not require rebuilding the archive.
+
 ## Inspect before installing
 
 When the optional `pmtiles` CLI is available, the build script runs both checks
-automatically. They can also be repeated manually:
+automatically and refuses to publish the archive unless metadata contains all
+Android-required layers: `earth`, `water`, `roads`, `boundaries`, and `places`.
+It also checks the PMTiles v3 header and a conservative minimum size. Generation
+uses `build/offline/italy.building.pmtiles`, whose final extension lets
+Planetiler infer PMTiles output correctly. Only after these checks succeed is
+that file moved over the canonical archive, preserving an earlier good archive
+if generation or verification fails. A failed staged artifact is removed. The
+CLI checks can also be repeated
+manually:
 
 ```powershell
 pmtiles show build/offline/italy.pmtiles --metadata
@@ -127,6 +151,16 @@ current pinned profile defines the source layers used by the Android style:
 `earth`, `water`, `roads`, `boundaries`, and `places`. If a deliberately updated
 profile changes its schema, reconcile the style against the generated metadata
 before installing; do not guess layer names.
+
+To extract the exact raw MVT for a visibly problematic tile without modifying
+the archive or Android runtime, identify its Z/X/Y coordinate and run:
+
+```powershell
+.\tools\offline-map\inspect-pmtiles-tile.ps1 -Zoom <z> -X <x> -Y <y>
+```
+
+The binary-safe extractor writes `build/offline/inspect/<z>-<x>-<y>.mvt` for
+inspection with a vector-tile decoder. This is developer diagnostics only.
 
 ## Install into the debug app
 
@@ -142,7 +176,8 @@ With multiple devices:
 .\tools\offline-map\install-italy-map.ps1 -Serial <adb-serial>
 ```
 
-The installer pushes through `/data/local/tmp`, uses Android `run-as` to stage
+The installer first rejects an undersized file or invalid PMTiles v3 header. It
+then pushes through `/data/local/tmp`, uses Android `run-as` to stage
 and replace the file, compares byte sizes, and verifies:
 
 ```text

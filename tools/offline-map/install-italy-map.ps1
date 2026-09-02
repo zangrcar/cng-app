@@ -15,6 +15,20 @@ $appDestination = "files/maps/italy.pmtiles"
 if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
     throw "Missing $sourceFile. Run build-italy-map.ps1 first."
 }
+$sourceSize = (Get-Item -LiteralPath $sourceFile).Length
+if ($sourceSize -lt 10MB) {
+    throw "Refusing to install suspiciously small PMTiles ($sourceSize bytes): $sourceFile"
+}
+$header = New-Object byte[] 8
+$stream = [System.IO.File]::OpenRead($sourceFile)
+try {
+    $headerRead = $stream.Read($header, 0, $header.Length)
+} finally {
+    $stream.Dispose()
+}
+if ($headerRead -lt 8 -or [System.Text.Encoding]::ASCII.GetString($header, 0, 7) -ne "PMTiles" -or $header[7] -ne 3) {
+    throw "Refusing to install a file without a valid PMTiles v3 header: $sourceFile"
+}
 
 $adbCommand = Get-Command adb -ErrorAction SilentlyContinue
 if ($null -eq $adbCommand -and -not [string]::IsNullOrWhiteSpace($env:ANDROID_HOME)) {
@@ -62,7 +76,7 @@ try {
     Invoke-Adb @("shell", "run-as", $packageId, "cp", $remoteTemporary, "$appDestination.pending") | Out-Null
     Invoke-Adb @("shell", "run-as", $packageId, "mv", "$appDestination.pending", $appDestination) | Out-Null
 
-    $localSize = (Get-Item -LiteralPath $sourceFile).Length
+    $localSize = $sourceSize
     $remoteSizeText = (Invoke-Adb @("shell", "run-as", $packageId, "stat", "-c", "%s", $appDestination) | Out-String).Trim()
     $remoteSize = 0L
     if (-not [long]::TryParse($remoteSizeText, [ref]$remoteSize)) {

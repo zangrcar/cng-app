@@ -18,3 +18,4 @@ pmtiles.exe
 build/offline/
 *.pmtiles
 *.osm.pbf
+/pmtiles.exe

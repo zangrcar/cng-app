@@ -374,7 +374,11 @@ class MainActivity : ComponentActivity() {
     private fun centerMapOnPlace(place: PlaceSearchResult) {
         val map = map ?: return
         mainViewModel.setSearchedPlaceMarker(place)
-        map.locationComponent.cameraMode = CameraMode.NONE
+
+        if (map.locationComponent.isLocationComponentActivated) {
+            map.locationComponent.cameraMode = CameraMode.NONE
+        }
+
         map.animateCamera(
             CameraUpdateFactory.newLatLngZoom(
                 LatLng(place.latitude, place.longitude),
@@ -390,13 +394,18 @@ class MainActivity : ComponentActivity() {
             permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
             return
         }
-        val location = map?.locationComponent?.lastKnownLocation
+        val locationComponent = map?.locationComponent
+        val location = if (locationComponent?.isLocationComponentActivated == true) {
+            locationComponent.lastKnownLocation
+        } else {
+            null
+        }
         if (location != null) {
             routeLocationRequest = true
             handleResolvedLocation(location)
         } else {
             routeLocationRequest = true
-            mainViewModel.setQuickSearchError("Current location unavailable.")
+            mainViewModel.setQuickSearchError(null)
             enableLocationAndCenter(showWaiting = false, forceCenter = true)
         }
     }

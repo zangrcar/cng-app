@@ -709,6 +709,15 @@ Phase 8B production NordEst proof and mixed-geometry fill correction (2026-09-02
 - `.\gradlew.bat assembleDebug`: PASS
 - `git diff --check`: PASS
 
+Narrow LocationComponent safety patch:
+- removed `pmtiles.exe` from Git tracking and ignored it as a local developer tool
+- searched-place camera movement now changes LocationComponent camera mode only
+  after activation
+- Use my location for route now reads `lastKnownLocation` only from an activated
+  LocationComponent and no longer reports Current location unavailable before
+  attempting a fresh location request
+- physical Samsung Galaxy S23 verification is pending
+
 ## Important discoveries
 
 - MapLibre Android 13.x uses Vulkan for `org.maplibre.gl:android-sdk`; the explicit OpenGL artifact is `org.maplibre.gl:android-sdk-opengl:13.3.1`.

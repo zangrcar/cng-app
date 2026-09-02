@@ -44,7 +44,7 @@ android-native
 - [x] 5. Station bottom sheet + live details + Google Maps navigation
 - [x] 6. Search for another place
 - [x] 7. Ordered route mode + stations along route (technically complete)
-- [x] 8A. Offline-safe style and app-owned overlays (glyph fix physical verification pending)
+- [x] 8A. Offline-safe style and app-owned overlays (physically verified)
 - [x] 8B. Full Italy offline basemap for personal build (production archive + local installation physically verified; public distribution deferred)
 - [ ] 8C. Remaining polish/testing on real phone
 
@@ -738,6 +738,16 @@ Narrow LocationComponent safety patch:
   LocationComponent and no longer reports Current location unavailable before
   attempting a fresh location request
 - physical Samsung Galaxy S23 verification is pending
+
+Phase 8C one-shot location reliability patch:
+- stale/null last-location callbacks no longer restart location work after the
+  pending route or center action is cancelled
+- `getLastLocation` failure now falls through to one active high-accuracy request;
+  active update failure is terminal instead of displaying a false Waiting message
+- a missing LocationEngine reports Current location unavailable rather than Waiting
+- permission loss during the active request reports a permission error consistently
+- pure failure-decision logic is unit tested; physical Samsung Galaxy S23
+  verification remains pending
 
 ## Important discoveries
 

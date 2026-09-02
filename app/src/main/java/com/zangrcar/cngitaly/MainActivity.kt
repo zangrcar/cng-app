@@ -78,17 +78,39 @@ class MainActivity : ComponentActivity() {
                 map?.locationComponent?.locationEngine?.removeLocationUpdates(this)
                 map?.locationComponent?.forceLocationUpdate(location)
                 handleResolvedLocation(location)
-            } else {
+            } else if (
+                resolvedLocationAction(
+                    routeLocationRequest,
+                    centerWhenLocationArrives
+                ) != ResolvedLocationAction.NONE
+            ) {
                 requestLocationUpdate()
             }
         }
 
         override fun onFailure(exception: Exception) {
+            val failedActiveUpdate = requestingCenterLocation
             requestingCenterLocation = false
-            if (routeLocationRequest) {
-                clearPendingLocationRequest()
-                mainViewModel.setQuickSearchError("Current location unavailable.")
-            } else locationMessage = "Waiting for location…"
+
+            val pendingAction = resolvedLocationAction(
+                routeLocationRequest,
+                centerWhenLocationArrives
+            )
+
+            when (
+                locationFailureAction(
+                    pendingAction = pendingAction,
+                    failedActiveUpdate = failedActiveUpdate
+                )
+            ) {
+                LocationFailureAction.IGNORE -> Unit
+
+                LocationFailureAction.REQUEST_ACTIVE_UPDATE ->
+                    requestLocationUpdate()
+
+                LocationFailureAction.REPORT_UNAVAILABLE ->
+                    reportPendingLocationUnavailable()
+            }
         }
     }
 
@@ -343,13 +365,36 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestLocationUpdate() {
-        if (requestingCenterLocation || !hasForegroundLocationPermission()) return
-        val engine = map?.locationComponent?.locationEngine
-        if (engine == null) {
+        val pendingAction = resolvedLocationAction(
+            routeLocationRequest,
+            centerWhenLocationArrives
+        )
+
+        if (
+            pendingAction == ResolvedLocationAction.NONE ||
+            requestingCenterLocation
+        ) {
+            return
+        }
+
+        if (!hasForegroundLocationPermission()) {
             val wasRouteRequest = routeLocationRequest
             clearPendingLocationRequest()
-            if (wasRouteRequest) mainViewModel.setQuickSearchError("Current location unavailable.")
-            else locationMessage = "Waiting for location…"
+
+            if (wasRouteRequest) {
+                mainViewModel.setQuickSearchError(
+                    "Location permission is required."
+                )
+            } else {
+                locationMessage =
+                    "Location permission is needed to show your current position."
+            }
+            return
+        }
+
+        val engine = map?.locationComponent?.locationEngine
+        if (engine == null) {
+            reportPendingLocationUnavailable()
             return
         }
         requestingCenterLocation = true
@@ -364,7 +409,15 @@ class MainActivity : ComponentActivity() {
         } catch (_: SecurityException) {
             val wasRouteRequest = routeLocationRequest
             clearPendingLocationRequest()
-            if (wasRouteRequest) mainViewModel.setQuickSearchError("Current location unavailable.")
+
+            if (wasRouteRequest) {
+                mainViewModel.setQuickSearchError(
+                    "Location permission is required."
+                )
+            } else {
+                locationMessage =
+                    "Location permission is needed to show your current position."
+            }
         }
     }
 
@@ -433,6 +486,19 @@ class MainActivity : ComponentActivity() {
         requestingCenterLocation = false
         centerWhenLocationArrives = false
         map?.locationComponent?.locationEngine?.removeLocationUpdates(centerLocationCallback)
+    }
+
+    private fun reportPendingLocationUnavailable() {
+        val wasRouteRequest = routeLocationRequest
+        clearPendingLocationRequest()
+
+        if (wasRouteRequest) {
+            mainViewModel.setQuickSearchError(
+                "Current location unavailable."
+            )
+        } else {
+            locationMessage = "Current location unavailable."
+        }
     }
 
     private fun handleResolvedLocation(location: Location) {

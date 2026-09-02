@@ -27,3 +27,23 @@ internal fun resolvedLocationAction(
     centerWhenLocationArrives -> ResolvedLocationAction.CENTER
     else -> ResolvedLocationAction.NONE
 }
+
+internal enum class LocationFailureAction {
+    IGNORE,
+    REQUEST_ACTIVE_UPDATE,
+    REPORT_UNAVAILABLE
+}
+
+internal fun locationFailureAction(
+    pendingAction: ResolvedLocationAction,
+    failedActiveUpdate: Boolean
+): LocationFailureAction = when {
+    pendingAction == ResolvedLocationAction.NONE ->
+        LocationFailureAction.IGNORE
+
+    !failedActiveUpdate ->
+        LocationFailureAction.REQUEST_ACTIVE_UPDATE
+
+    else ->
+        LocationFailureAction.REPORT_UNAVAILABLE
+}

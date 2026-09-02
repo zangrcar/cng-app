@@ -57,4 +57,31 @@ class StationProjectionGuardTest {
         assertEquals(ResolvedLocationAction.CENTER, resolvedLocationAction(false, true))
         assertEquals(ResolvedLocationAction.NONE, resolvedLocationAction(false, false))
     }
+
+    @Test fun `location failure retries last-known failure once but terminally fails active update`() {
+        assertEquals(
+            LocationFailureAction.REQUEST_ACTIVE_UPDATE,
+            locationFailureAction(ResolvedLocationAction.ROUTE, failedActiveUpdate = false)
+        )
+        assertEquals(
+            LocationFailureAction.REQUEST_ACTIVE_UPDATE,
+            locationFailureAction(ResolvedLocationAction.CENTER, failedActiveUpdate = false)
+        )
+        assertEquals(
+            LocationFailureAction.REPORT_UNAVAILABLE,
+            locationFailureAction(ResolvedLocationAction.ROUTE, failedActiveUpdate = true)
+        )
+        assertEquals(
+            LocationFailureAction.REPORT_UNAVAILABLE,
+            locationFailureAction(ResolvedLocationAction.CENTER, failedActiveUpdate = true)
+        )
+        assertEquals(
+            LocationFailureAction.IGNORE,
+            locationFailureAction(ResolvedLocationAction.NONE, failedActiveUpdate = false)
+        )
+        assertEquals(
+            LocationFailureAction.IGNORE,
+            locationFailureAction(ResolvedLocationAction.NONE, failedActiveUpdate = true)
+        )
+    }
 }

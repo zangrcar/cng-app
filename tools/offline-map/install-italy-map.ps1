@@ -26,8 +26,18 @@ $adb = $adbCommand.Source
 $selector = if ([string]::IsNullOrWhiteSpace($Serial)) { @() } else { @("-s", $Serial) }
 
 function Invoke-Adb([string[]]$Arguments) {
-    $output = & $adb @selector @Arguments 2>&1
-    if ($LASTEXITCODE -ne 0) {
+    # Windows adb writes normal progress (including a successful push summary) to
+    # stderr. Keep cmdlet errors terminating everywhere else, but capture both
+    # native streams here and make adb's exit code authoritative.
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & $adb @selector @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    if ($exitCode -ne 0) {
         throw "adb $($Arguments -join ' ') failed:`n$($output -join [Environment]::NewLine)"
     }
     return $output

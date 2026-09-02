@@ -105,6 +105,13 @@ Android `OFFLINE_PMTILES` path. It is not the eventual Italy package. Once
 Geofabrik access is available, the production pipeline remains Geofabrik Italy
 OSM -> Protomaps Planetiler -> `italy.pmtiles`.
 
+This Ljubljana developer path has rendered successfully on a physical Samsung
+Galaxy S23. Its 39,947,520-byte (approximately 38.1 MiB) archive loaded from the
+app-private map location and, in airplane mode, displayed land/water, Ljubljana
+roads and the Ljubljana place label while GPS and local CNG station overlays,
+prices, and clusters remained visible. This proves the Android PMTiles path; it
+does not make LjubljanaTest a production Italy dataset.
+
 ## Inspect before installing
 
 When the optional `pmtiles` CLI is available, the build script runs both checks
@@ -149,5 +156,5 @@ style load. If the style loads but roads/water are absent, inspect archive
 metadata and source layers before changing app mode selection.
 
 The app must visibly retain OpenStreetMap attribution when this produced work is
-used. A real Italy/Nord-Est archive rendering on the physical phone is still
-required before Phase 8B can be marked complete.
+used. Phase 8B still requires a production Italy/Nord-Est source/build, an
+end-user download/update mechanism, and final offline basemap styling/polish.

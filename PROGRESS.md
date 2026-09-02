@@ -16,9 +16,9 @@ route. Route mode projects only stations within the selected geometric corridor.
 Phase 8A uses the original remote Liberty style online and a separate minimal
 bundled style with app-owned marker glyphs offline. The Phase 8B application
 foundation can also load an installed `filesDir/maps/italy.pmtiles` through a
-simple Protomaps-compatible local style. No Italy archive or download source/UI
-is included yet; physical offline-basemap rendering and Slovenia support remain
-pending.
+simple Protomaps-compatible local style. That architecture is physically proven
+with the Ljubljana developer archive, but no production Italy archive or
+end-user download/update UI is included yet.
 
 Branch:
 android-native
@@ -609,6 +609,30 @@ Phase 8B Ljubljana developer proof input (2026-09-01):
 - total unit tests: 108 PASS
 - `\.\gradlew.bat test`: PASS
 - `\.\gradlew.bat assembleDebug`: PASS
+
+Phase 8B Ljubljana physical developer proof and installer cleanup (2026-09-02):
+- physically verified on a Samsung Galaxy S23 that the `LjubljanaTest` raw
+  BBBike OSM PBF builds successfully through the pinned Protomaps Planetiler
+  profile into `build/offline/italy.pmtiles`
+- the generated developer archive was 39,947,520 bytes (approximately 38.1 MiB)
+  and loaded from the app-private `files/maps/italy.pmtiles` location
+- in airplane mode, MapLibre rendered local land and water at world zoom and,
+  around Ljubljana, local roads and the Ljubljana place label
+- GPS remained visible, and local CNG station overlays, prices, and clusters
+  rendered above the offline basemap
+- the Android PMTiles architecture is therefore physically proven; LjubljanaTest
+  remains only a developer proof and is not the production Italy dataset
+- fixed `install-italy-map.ps1` so normal adb stderr progress does not become a
+  terminating PowerShell error; the helper captures both native streams and
+  decides success or failure from adb's exit code while preserving global
+  terminating cmdlet error handling
+- Phase 8B remains incomplete: production Italy/NordEst map source/build, an
+  end-user download/update mechanism, and final offline basemap styling/polish
+  remain
+- PowerShell parser check for `install-italy-map.ps1`: PASS
+- total unit tests: 108 PASS
+- `.\gradlew.bat test`: PASS
+- `.\gradlew.bat assembleDebug`: PASS
 
 ## Important discoveries
 

@@ -530,7 +530,8 @@ Phase 8B developer archive pipeline (2026-09-01):
   profile; and directly generates `build/offline/italy.pmtiles` from Geofabrik
   Italy data without `pmtiles extract`
 - the build supports a same-schema `-Region NordEst` proof archive using
-  Geofabrik `italy/nord-est`, keeps its checkout/source cache under ignored
+  Planetiler area `nord-est` and Geofabrik's Italy/Nord-Est PBF, keeps its
+  checkout/source cache under ignored
   `build/offline`, rejects missing or under-10 MiB output, and automatically runs
   `pmtiles show --metadata` plus `pmtiles verify` when that optional CLI exists
 - validated the pinned official basemaps source: its documented build flags and
@@ -556,6 +557,58 @@ Phase 8B developer archive pipeline (2026-09-01):
   are also unavailable for the requested archive verification and installation
 - real archive metadata and physical-device rendering remain pending, so Phase
   8B is not complete
+
+Phase 8B Windows source-download correction (2026-09-01):
+- physical `-Region NordEst` testing confirmed that `nord-est` is the correct
+  Planetiler Geofabrik area (not `italy/nord-est`) and resolves the expected
+  Geofabrik Italy/Nord-Est URL
+- the build then physically failed in Planetiler's 10-second HTTP HEAD metadata
+  lookup, and a separate 20-second `curl.exe -I -L` request to the listed ~593 MB
+  PBF also timed out with zero bytes; the upstream file was not missing
+- `build-italy-map.ps1` now pre-downloads the selected OSM PBF, Natural Earth,
+  water polygons, land polygons, and daylight landcover to the exact
+  `tiles/data/sources` paths expected by the pinned profile, then runs Planetiler
+  without `--download`
+- completed files are reused using conservative local minimum sizes; downloads
+  stage to retained `.partial` files, prefer Windows BITS for fresh transfers,
+  and use resumable/retrying `curl.exe` GET as fallback or for partial files
+- existing QRank and PGF encoding caches are preserved and reported; their
+  separate profile-managed behavior is unchanged
+- the pinned Planetiler JAR is reused when its recorded basemaps revision still
+  matches, with `-Rebuild` available for an explicit Maven rebuild
+- documented the corrected area name, physical timeout, local-source strategy,
+  cache behavior, and JAR reuse in `tools/offline-map/README.md`
+- PowerShell parser check: PASS
+- cached-file helper behavior check (invalid URL, valid local destination): PASS
+- total unit tests: 108 PASS
+- `\.\gradlew.bat test`: PASS
+- `\.\gradlew.bat assembleDebug`: PASS
+- the large downloads and Planetiler build were intentionally not run in this
+  environment; PMTiles generation and physical rendering remain pending
+- after the primary Geofabrik host physically returned HTTP 503 overload, the
+  OSM downloader was extended to try Geofabrik's official `download-ext2` mirror
+  after primary timeout/network/HTTP failure while preserving the same resumable
+  `.partial` destination; no other source URL or pipeline behavior changed
+- mirror-fallback PowerShell parser check: PASS
+- post-change `\.\gradlew.bat test` and `\.\gradlew.bat assembleDebug`: PASS
+
+Phase 8B Ljubljana developer proof input (2026-09-01):
+- added temporary `-Region LjubljanaTest`, mapping BBBike's raw Ljubljana OSM
+  PBF to local `data/sources/ljubljana-test.osm.pbf`, Planetiler area
+  `ljubljana-test`, and a conservative 10 MiB input minimum
+- the raw PBF still passes through the same pinned Protomaps Basemap Planetiler
+  profile with automatic downloads disabled and produces the existing
+  `build/offline/italy.pmtiles` developer artifact; no BBBike Shortbread
+  PMTiles/MBTiles product is used
+- all Natural Earth, water/land polygon, landcover, QRank, and PGF sources and
+  cache behavior remain unchanged
+- this region is only an end-to-end architecture proof; the eventual Italy
+  package remains Geofabrik Italy OSM -> Protomaps Planetiler -> `italy.pmtiles`
+  when Geofabrik access is available, and physical rendering is still pending
+- PowerShell parser check: PASS
+- total unit tests: 108 PASS
+- `\.\gradlew.bat test`: PASS
+- `\.\gradlew.bat assembleDebug`: PASS
 
 ## Important discoveries
 

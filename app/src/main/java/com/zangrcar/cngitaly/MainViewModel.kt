@@ -100,12 +100,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         MainUiState(meta, isOnline, isRefreshing)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), MainUiState())
 
-    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) = updateConnectivity()
-        override fun onLost(network: Network) = updateConnectivity()
-        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) =
-            updateConnectivity()
-    }
+    private val networkCallback =
+        object : ConnectivityManager.NetworkCallback() {
+
+            override fun onAvailable(network: Network) {
+                // Do not synchronously query ConnectivityManager here.
+                // API 26+ delivers onCapabilitiesChanged immediately afterward.
+            }
+
+            override fun onLost(network: Network) {
+                online.value = false
+            }
+
+            override fun onCapabilitiesChanged(
+                network: Network,
+                capabilities: NetworkCapabilities
+            ) {
+                online.value = hasValidatedInternetCapabilities(
+                    hasInternet = capabilities.hasCapability(
+                        NetworkCapabilities.NET_CAPABILITY_INTERNET
+                    ),
+                    hasValidated = capabilities.hasCapability(
+                        NetworkCapabilities.NET_CAPABILITY_VALIDATED
+                    )
+                )
+            }
+        }
 
     init {
         connectivityManager.registerDefaultNetworkCallback(networkCallback)
@@ -295,10 +315,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         super.onCleared()
     }
 
-    private fun updateConnectivity() {
-        online.value = hasValidatedInternet()
-    }
-
     private suspend fun loadAllStations() {
         recomputeStations()
     }
@@ -379,3 +395,8 @@ internal fun shouldSearchPlaceQuery(query: String): Boolean =
 
 internal fun typeaheadQueryIsCurrent(currentQuery: String, requestedNormalizedQuery: String): Boolean =
     normalizePlaceQuery(currentQuery) == requestedNormalizedQuery
+
+internal fun hasValidatedInternetCapabilities(
+    hasInternet: Boolean,
+    hasValidated: Boolean
+): Boolean = hasInternet && hasValidated

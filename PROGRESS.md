@@ -759,6 +759,20 @@ Phase 8C bounded location-resolution deadline:
 - the pure timeout decision is unit tested; Samsung Galaxy S23 physical
   verification remains pending
 
+Phase 8C connectivity transition fix:
+- Samsung Galaxy S23 physical testing found a reproducible online-to-offline
+  transition bug: offline-to-online worked, but after app removal from Recents
+  and reopening online, the inverse transition could remain stuck as online
+- root cause was synchronous `activeNetwork`/`getNetworkCapabilities` re-querying
+  from `NetworkCallback` callbacks, which is race-prone under Android's API contract
+- `onLost` now marks the default network offline directly;
+  `onCapabilitiesChanged` derives validated internet state from the supplied
+  `NetworkCapabilities`; and `onAvailable` waits for the following capability
+  callback instead of assuming internet
+- the initial synchronous connectivity read remains for ViewModel initialization
+- a unit test covers the `INTERNET` + `VALIDATED` capability truth table
+- Samsung Galaxy S23 retest is pending
+
 ## Important discoveries
 
 - MapLibre Android 13.x uses Vulkan for `org.maplibre.gl:android-sdk`; the explicit OpenGL artifact is `org.maplibre.gl:android-sdk-opengl:13.3.1`.

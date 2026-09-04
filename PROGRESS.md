@@ -46,7 +46,7 @@ android-native
 - [x] 7. Ordered route mode + stations along route (technically complete)
 - [x] 8A. Offline-safe style and app-owned overlays (physically verified)
 - [x] 8B. Full Italy offline basemap for personal build (production archive + local installation physically verified; public distribution deferred)
-- [ ] 8C. Remaining polish/testing on real phone
+- [x] 8C. Remaining polish/testing on real phone (physically verified; personal trip build ready)
 
 ## Implementation history
 
@@ -786,6 +786,30 @@ Phase 8C disabled device Location UX:
   Location is enabled
 - the existing permission and 30-second GPS flows remain unchanged
 - physical Samsung Galaxy S23 verification is pending
+
+Phase 8C final Samsung Galaxy S23 verification:
+- the connectivity transition fix was physically retested successfully:
+  online -> offline and offline -> online both switch map styles correctly,
+  including after removing the app from Recents and reopening it
+- the disabled-device-Location flow was physically verified: the map current-
+  location action prompts immediately when Location is off; Cancel works; Open
+  settings opens Android Location settings; returning after enabling Location
+  automatically resumes CENTER; returning without enabling it leaves no pending
+  action; and ROUTE resumes correctly after enabling Location
+- airplane mode remains independent from the Location toggle: with Android
+  Location enabled, current-position GPS continues to work offline
+- an active route was physically verified across online -> offline -> online
+  style changes: route geometry, waypoint markers, route summary, route-filtered
+  stations, and camera state survive Liberty <-> local PMTiles transitions without
+  duplicate overlays; clearing the route restores normal station display
+- the full-Italy offline PMTiles build, offline cold-start rendering, station
+  markers/prices/clusters/details, and GPS behavior had already been physically
+  verified on the same Samsung Galaxy S23
+- Phase 8C is complete for the current personal-use scope; this commit documents
+  the known-good personal trip build
+- Google Play/public distribution, hosting, in-app map downloading, and map-size
+  optimization remain intentionally deferred and are not part of the completed
+  personal trip scope
 
 ## Important discoveries
 

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -39,6 +39,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,6 +53,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -66,6 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -95,6 +98,12 @@ import com.zangrcar.cngitaly.data.geocoding.PlaceSearchResult
 import com.zangrcar.cngitaly.data.routing.RouteEndpoint
 import com.zangrcar.cngitaly.data.routing.RouteResult
 import com.zangrcar.cngitaly.data.routing.RouteCorridorSetting
+import com.zangrcar.cngitaly.ui.theme.FreshGreenDark
+import com.zangrcar.cngitaly.ui.theme.FreshGreenLight
+import com.zangrcar.cngitaly.ui.theme.OfflineGrayDark
+import com.zangrcar.cngitaly.ui.theme.OfflineGrayLight
+import com.zangrcar.cngitaly.ui.theme.WarningAmberDark
+import com.zangrcar.cngitaly.ui.theme.WarningAmberLight
 import kotlinx.coroutines.launch
 import org.maplibre.android.maps.MapView
 import java.time.DayOfWeek
@@ -176,7 +185,9 @@ fun MapScreen(
         drawerState = drawerState,
         gesturesEnabled = drawerState.isOpen,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(
+                drawerContainerColor = MaterialTheme.colorScheme.surface
+            ) {
                 DrawerContent(
                     uiState = uiState,
                     activeRoute = activeRoute,
@@ -202,14 +213,11 @@ fun MapScreen(
                     .padding(8.dp),
                 horizontalAlignment = Alignment.Start
             ) {
-                IconButton(
+                MapControlButton(
                     onClick = { coroutineScope.launch { drawerState.open() } },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(Color.Black, CircleShape)
-                ) {
-                    Icon(Icons.Default.Menu, "Open menu", tint = Color.White)
-                }
+                    icon = Icons.Default.Menu,
+                    contentDescription = "Open menu"
+                )
                 Spacer(Modifier.height(8.dp))
                 DataStatusButton(
                     uiState = uiState,
@@ -220,34 +228,26 @@ fun MapScreen(
                     }
                 )
                 Spacer(Modifier.height(8.dp))
-                FilledIconButton(
+                MapControlButton(
                     onClick = {
                         viewModel.clearSelectedStation()
                         viewModel.clearPlaceSearch()
                         showPlaceSearch = true
                     },
-                    modifier = Modifier.size(48.dp),
-                    colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
-                        containerColor = Color.Black,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(Icons.Default.Search, "Search place")
-                }
+                    icon = Icons.Default.Search,
+                    contentDescription = "Search place"
+                )
                 if (activeRoute != null) {
                     Spacer(Modifier.height(8.dp))
-                    FilledIconButton(
+                    MapControlButton(
                         onClick = {
                             viewModel.clearSelectedStation()
                             viewModel.clearQuickSearch()
                             showAddStop = true
                         },
-                        modifier = Modifier.size(48.dp),
-                        colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
-                            containerColor = Color.Black,
-                            contentColor = Color.White
-                        )
-                    ) { Icon(Icons.Default.Add, "Add stop") }
+                        icon = Icons.Default.Add,
+                        contentDescription = "Add stop"
+                    )
                 }
             }
             if (activeRoute != null) {
@@ -258,22 +258,35 @@ fun MapScreen(
                 )
             }
             if (isRouteLoading) {
-                Surface(Modifier.align(Alignment.Center), shape = MaterialTheme.shapes.extraLarge, tonalElevation = 6.dp) {
+                Surface(
+                    modifier = Modifier.align(Alignment.Center),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 6.dp
+                ) {
                     Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.size(10.dp)); Text("Calculating route…")
+                        CircularProgressIndicator(
+                            Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.size(10.dp))
+                        Text(
+                            "Calculating route…",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                 }
             }
-            FilledIconButton(
+            MapControlButton(
                 onClick = onCurrentLocationClick,
+                icon = Icons.Default.MyLocation,
+                contentDescription = "Current location",
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
                     .padding(16.dp)
-            ) {
-                Icon(Icons.Default.MyLocation, "Current location")
-            }
+            )
             if (searchedPlace != null) {
                 androidx.compose.material3.ExtendedFloatingActionButton(
                     onClick = {
@@ -380,16 +393,43 @@ fun MapScreen(
 }
 
 @Composable
+private fun MapControlButton(
+    onClick: () -> Unit,
+    icon: ImageVector,
+    contentDescription: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.size(48.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shadowElevation = 4.dp
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription)
+        }
+    }
+}
+
+@Composable
 private fun RouteSummary(route: RouteResult, onClear: () -> Unit, modifier: Modifier = Modifier) {
     val kilometers = (route.distanceMeters / 1000.0).toInt()
     val totalMinutes = (route.durationSeconds / 60.0).toInt()
-    Surface(modifier = modifier, shape = MaterialTheme.shapes.extraLarge, tonalElevation = 4.dp) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 4.dp
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "$kilometers km · ${totalMinutes / 60} h ${totalMinutes % 60} min",
-                Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp)
+                Modifier.padding(start = 16.dp, top = 10.dp, bottom = 10.dp),
+                style = MaterialTheme.typography.titleMedium
             )
-            Spacer(Modifier.size(8.dp))
+            Spacer(Modifier.size(6.dp))
             IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Default.Close, "Clear route")
             }
@@ -500,6 +540,25 @@ private fun PlaceTypeahead(
         onValueChange = onQueryChange,
         modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
         singleLine = true,
+        shape = MaterialTheme.shapes.medium,
+        leadingIcon = {
+            Icon(Icons.Default.Search, contentDescription = null)
+        },
+        trailingIcon = if (state.query.isNotEmpty()) {
+            {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Default.Close, contentDescription = "Clear search")
+                }
+            }
+        } else {
+            null
+        },
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedContainerColor = MaterialTheme.colorScheme.surface,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+            focusedBorderColor = MaterialTheme.colorScheme.primary,
+            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+        ),
         placeholder = { Text(placeholder) },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = {
@@ -556,15 +615,27 @@ private fun StationDetailsContent(
         Text(station.name, style = MaterialTheme.typography.headlineSmall)
         if (station.formattedAddress.isNotEmpty()) {
             Spacer(Modifier.height(8.dp))
-            Text(station.formattedAddress, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                station.formattedAddress,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         StationInfo(station)
         LiveStatus(liveDetails, isLiveLoading)
 
         Spacer(Modifier.height(24.dp))
-        Text("CNG PRICES", style = MaterialTheme.typography.labelMedium)
+        Text(
+            "CNG PRICES",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         if (liveDetails?.cngPrices?.isNotEmpty() == true) {
-            Text("Live MIMIT", style = MaterialTheme.typography.bodySmall)
+            Text(
+                "Live MIMIT",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
         Spacer(Modifier.height(8.dp))
         if (liveDetails?.cngPrices?.isNotEmpty() == true) {
@@ -583,12 +654,21 @@ private fun StationDetailsContent(
         LiveContactSection(liveDetails)
 
         Spacer(Modifier.height(16.dp))
-        Text("SOURCE", style = MaterialTheme.typography.labelMedium)
+        Text(
+            "SOURCE",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(Modifier.height(6.dp))
-        Text("Source: MIMIT", style = MaterialTheme.typography.bodyMedium)
+        Text(
+            "Source: MIMIT",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Text(
             "MIMIT price data: ${formatDatasetDate(uiState.metadata?.priceDatasetDate, false)}",
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         if (!isLocalDataFresh(uiState)) {
             Spacer(Modifier.height(6.dp))
@@ -625,19 +705,29 @@ private fun LiveStatus(liveDetails: LiveStationDetails?, isLoading: Boolean) {
         LiveOpenState.UNKNOWN -> return
     }
     val color = when (status.state) {
-        LiveOpenState.OPEN -> MaterialTheme.colorScheme.primary
+        LiveOpenState.OPEN -> MaterialTheme.colorScheme.secondary
         LiveOpenState.CLOSED -> MaterialTheme.colorScheme.error
         LiveOpenState.UNKNOWN -> return
     }
     Text(label, style = MaterialTheme.typography.titleMedium, color = color)
-    status.detail?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+    status.detail?.let {
+        Text(
+            it,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 }
 
 @Composable
 private fun OpeningHoursSection(liveDetails: LiveStationDetails?) {
     if (!shouldShowOpeningHoursSection(liveDetails?.openingHours.orEmpty())) return
     Spacer(Modifier.height(16.dp))
-    Text("OPENING HOURS", style = MaterialTheme.typography.labelMedium)
+    Text(
+        "OPENING HOURS",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
     Spacer(Modifier.height(6.dp))
     DayOfWeek.entries.forEach { day ->
         val entry = liveDetails?.openingHours?.firstOrNull { it.dayOfWeek == day }
@@ -667,13 +757,18 @@ private fun LiveContactSection(liveDetails: LiveStationDetails?) {
     }
     if (contacts.isEmpty() && liveDetails.services.isEmpty()) return
     Spacer(Modifier.height(16.dp))
-    Text("LIVE DETAILS", style = MaterialTheme.typography.labelMedium)
+    Text(
+        "LIVE DETAILS",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
     Spacer(Modifier.height(6.dp))
     contacts.forEach { (label, value) -> DataRow("$label:", value) }
     if (liveDetails.services.isNotEmpty()) {
         Text(
             "Services: ${liveDetails.services.joinToString(", ")}",
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -711,9 +806,17 @@ private fun StationPriceRow(price: StationPrice) {
             Text(price.priceLabel, style = MaterialTheme.typography.titleMedium)
             Text(price.serviceLabel, style = MaterialTheme.typography.labelLarge)
         }
-        Text(price.fuelName, style = MaterialTheme.typography.bodySmall)
+        Text(
+            price.fuelName,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         price.communicatedLabel?.let {
-            Text("Communicated $it", style = MaterialTheme.typography.bodySmall)
+            Text(
+                "Communicated $it",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -734,9 +837,17 @@ private fun LiveStationPriceRow(price: LiveCngPrice) {
             Text(price.priceLabel, style = MaterialTheme.typography.titleMedium)
             Text(price.serviceLabel, style = MaterialTheme.typography.labelLarge)
         }
-        Text(price.fuelName, style = MaterialTheme.typography.bodySmall)
+        Text(
+            price.fuelName,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         price.validityDate?.let {
-            Text("Valid $it", style = MaterialTheme.typography.bodySmall)
+            Text(
+                "Valid $it",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
@@ -783,7 +894,11 @@ private fun DrawerContent(
         }
         Spacer(Modifier.height(24.dp))
         if (activeRoute != null) {
-            Text("ROUTE", style = MaterialTheme.typography.labelMedium)
+            Text(
+                "ROUTE",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Spacer(Modifier.height(12.dp))
             RouteDrawerEditor(
                 endpoints = routeDraft,
@@ -795,8 +910,14 @@ private fun DrawerContent(
                 onDone = onClose
             )
             Spacer(Modifier.height(24.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            Spacer(Modifier.height(24.dp))
         }
-        Text("DATA", style = MaterialTheme.typography.labelMedium)
+        Text(
+            "DATA",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(Modifier.height(12.dp))
         Text("Station data", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(12.dp))
@@ -839,9 +960,19 @@ private fun RouteDrawerEditor(
             endpoints.lastIndex -> "To"
             else -> index.toString()
         }
-        Text(label, style = MaterialTheme.typography.labelMedium)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(endpoint.label, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(
+                endpoint.label,
+                Modifier.weight(1f),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge
+            )
             if (index in 1 until endpoints.lastIndex) {
                 IconButton(onClick = {
                     onEndpointsChange(com.zangrcar.cngitaly.data.routing.QuickRouteActions.moveStop(endpoints, index, -1))
@@ -856,7 +987,11 @@ private fun RouteDrawerEditor(
         }
         Spacer(Modifier.height(8.dp))
     }
-    Text("Show stations within", style = MaterialTheme.typography.labelMedium)
+    Text(
+        "Show stations within",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
     Box {
         OutlinedButton(onClick = { corridorExpanded = true }) { Text(corridorLabel(corridorSetting)); Text(" ▾") }
         DropdownMenu(expanded = corridorExpanded, onDismissRequest = { corridorExpanded = false }) {
@@ -887,8 +1022,16 @@ private fun DataRow(label: String, value: String) {
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium)
-        Text(value, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
     }
 }
 
@@ -899,22 +1042,29 @@ private fun DataStatusButton(
     modifier: Modifier = Modifier
 ) {
     val status = dataStatus(uiState)
+    val darkTheme = isSystemInDarkTheme()
     val icon = when (status) {
         DataStatus.FRESH -> Icons.Default.CheckCircle
         DataStatus.STALE, DataStatus.NO_DATA -> Icons.Default.Warning
         DataStatus.OFFLINE -> Icons.Default.CloudOff
     }
     val container = when (status) {
-        DataStatus.FRESH -> Color(0xFF1B5E20)
-        DataStatus.STALE, DataStatus.NO_DATA -> Color(0xFFF9A825)
-        DataStatus.OFFLINE -> Color(0xFF424242)
+        DataStatus.FRESH -> if (darkTheme) FreshGreenDark else FreshGreenLight
+        DataStatus.STALE, DataStatus.NO_DATA ->
+            if (darkTheme) WarningAmberDark else WarningAmberLight
+        DataStatus.OFFLINE -> if (darkTheme) OfflineGrayDark else OfflineGrayLight
+    }
+    val content = when (status) {
+        DataStatus.FRESH -> if (darkTheme) Color(0xFF0D3B21) else Color.White
+        DataStatus.STALE, DataStatus.NO_DATA -> Color(0xFF202124)
+        DataStatus.OFFLINE -> if (darkTheme) Color(0xFF202124) else Color.White
     }
     FilledIconButton(
         onClick = onClick,
         modifier = modifier.size(48.dp),
         colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
             containerColor = container,
-            contentColor = Color.White
+            contentColor = content
         )
     ) {
         Icon(icon, "Station data status")

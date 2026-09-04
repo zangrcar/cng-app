@@ -821,7 +821,21 @@ Post-8C personal-build performance polish:
 - distance-to-route iteration no longer uses `zipWithNext` in the hot loop
 - the OSRM endpoint, full-route request, cache, request spacing, and timeouts
   remain unchanged
-- physical Samsung Galaxy S23 performance/regression verification is pending
+- Samsung Galaxy S23 verification passed: route calculation is noticeably
+  faster; station refresh showed no meaningful perceptible speed difference,
+  so no further refresh optimization is planned
+
+D1 visual identity foundation:
+- replaced the stock Android launcher artwork with a CNG Italy adaptive icon
+- added a monochrome themed launcher icon
+- replaced template/dynamic colors with fixed CNG Italy light and dark palettes
+- added consistent typography and shape foundations
+- softened map controls and existing surfaces without moving their locations
+- polished drawer, route summary, sheets, station details, and current search
+  field styling without changing navigation flows
+- D2 full-screen search/navigation UX and D3 draggable route editing remain
+  intentionally deferred
+- physical Samsung Galaxy S23 light/dark visual verification is pending
 
 ## Important discoveries
 

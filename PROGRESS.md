@@ -811,6 +811,18 @@ Phase 8C final Samsung Galaxy S23 verification:
   optimization remain intentionally deferred and are not part of the completed
   personal trip scope
 
+Post-8C personal-build performance polish:
+- MIMIT station and price CSV downloads now start concurrently instead of serially
+- route rendering still uses the untouched full OSRM geometry
+- route station projection uses a 75 m simplified filtering polyline to reduce
+  segment comparisons
+- stations near the corridor boundary fall back to the full route geometry so
+  corridor semantics remain exactly preserved
+- distance-to-route iteration no longer uses `zipWithNext` in the hot loop
+- the OSRM endpoint, full-route request, cache, request spacing, and timeouts
+  remain unchanged
+- physical Samsung Galaxy S23 performance/regression verification is pending
+
 ## Important discoveries
 
 - MapLibre Android 13.x uses Vulkan for `org.maplibre.gl:android-sdk`; the explicit OpenGL artifact is `org.maplibre.gl:android-sdk-opengl:13.3.1`.

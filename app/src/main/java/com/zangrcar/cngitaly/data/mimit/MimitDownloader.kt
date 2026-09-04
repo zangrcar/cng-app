@@ -1,6 +1,8 @@
 package com.zangrcar.cngitaly.data.mimit
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -15,9 +17,19 @@ class MimitDownloader(
         .build()
 ) {
     suspend fun downloadSnapshot(): MimitSnapshot = withContext(Dispatchers.IO) {
-        val stationsCsv = download(STATIONS_URL)
-        val pricesCsv = download(PRICES_URL)
-        MimitCsvParser.parseSnapshot(stationsCsv, pricesCsv)
+        coroutineScope {
+            val stationsDeferred = async {
+                download(STATIONS_URL)
+            }
+            val pricesDeferred = async {
+                download(PRICES_URL)
+            }
+
+            val stationsCsv = stationsDeferred.await()
+            val pricesCsv = pricesDeferred.await()
+
+            MimitCsvParser.parseSnapshot(stationsCsv, pricesCsv)
+        }
     }
 
     private fun download(url: String): String {

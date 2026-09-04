@@ -9,10 +9,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.zangrcar.cngitaly.data.routing.GeoPoint
-import com.zangrcar.cngitaly.data.routing.distancePointToRouteMeters
 import com.zangrcar.cngitaly.data.routing.expandedRouteBounds
+import com.zangrcar.cngitaly.data.routing.pointIsWithinRouteCorridor
 import com.zangrcar.cngitaly.data.routing.routeCorridorMeters
 import com.zangrcar.cngitaly.data.routing.RouteCorridorSetting
+import com.zangrcar.cngitaly.data.routing.simplifyRouteForFiltering
 
 class StationRepository(
     private val dao: StationDao,
@@ -32,12 +33,19 @@ class StationRepository(
         corridorSetting: RouteCorridorSetting = RouteCorridorSetting.Auto
     ): List<MapStation> = withContext(Dispatchers.Default) {
         val corridor = routeCorridorMeters(routeDistanceMeters, corridorSetting)
+        val simplifiedRoutePoints = simplifyRouteForFiltering(routePoints)
         val bounds = expandedRouteBounds(routePoints, corridor)
         dao.getStationsInBounds(bounds.north, bounds.south, bounds.east, bounds.west)
             .filter { station ->
-                distancePointToRouteMeters(
-                    GeoPoint(station.station.latitude, station.station.longitude), routePoints
-                ) <= corridor
+                pointIsWithinRouteCorridor(
+                    point = GeoPoint(
+                        station.station.latitude,
+                        station.station.longitude
+                    ),
+                    fullRoutePoints = routePoints,
+                    simplifiedRoutePoints = simplifiedRoutePoints,
+                    corridorMeters = corridor
+                )
             }
             .mapNotNull { it.toMapStation() }
     }

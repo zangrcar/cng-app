@@ -32,4 +32,81 @@ class RouteGeometryTest {
         assertTrue(distancePointToRouteMeters(GeoPoint(46.0, 10.0), diagonal) > 10_000)
         assertTrue(distancePointToRouteMeters(GeoPoint(43.01, 13.0), diagonal) < 3_000)
     }
+
+    @Test fun `straight dense route collapses to endpoints`() {
+        val denseRoute = (0..120).map { index ->
+            GeoPoint(45.0, 10.0 + index * 0.001)
+        }
+
+        val simplified = simplifyRouteForFiltering(denseRoute, toleranceMeters = 75.0)
+
+        assertEquals(2, simplified.size)
+        assertEquals(denseRoute.first(), simplified.first())
+        assertEquals(denseRoute.last(), simplified.last())
+    }
+
+    @Test fun `significant bend is preserved`() {
+        val bentRoute = listOf(
+            GeoPoint(45.0, 10.0),
+            GeoPoint(45.01, 10.01),
+            GeoPoint(45.0, 10.02)
+        )
+
+        assertEquals(
+            bentRoute,
+            simplifyRouteForFiltering(bentRoute, toleranceMeters = 75.0)
+        )
+    }
+
+    @Test fun `tiny deviation is removed`() {
+        val nearlyStraightRoute = listOf(
+            GeoPoint(45.0, 10.0),
+            GeoPoint(45.00002, 10.01),
+            GeoPoint(45.0, 10.02)
+        )
+
+        assertEquals(
+            listOf(nearlyStraightRoute.first(), nearlyStraightRoute.last()),
+            simplifyRouteForFiltering(nearlyStraightRoute, toleranceMeters = 75.0)
+        )
+    }
+
+    @Test fun `short routes stay unchanged`() {
+        val onePoint = listOf(GeoPoint(45.0, 10.0))
+        val twoPoints = listOf(GeoPoint(45.0, 10.0), GeoPoint(45.1, 10.1))
+
+        assertEquals(onePoint, simplifyRouteForFiltering(onePoint))
+        assertEquals(twoPoints, simplifyRouteForFiltering(twoPoints))
+    }
+
+    @Test fun `corridor helper agrees with exact route classification`() {
+        val fullRoute = listOf(
+            GeoPoint(45.0, 10.0),
+            GeoPoint(45.00002, 10.01),
+            GeoPoint(45.0, 10.02),
+            GeoPoint(45.01, 10.03),
+            GeoPoint(45.0, 10.04)
+        )
+        val simplifiedRoute = simplifyRouteForFiltering(fullRoute)
+        val corridor = 3_000.0
+        val stations = listOf(
+            GeoPoint(45.005, 10.015),
+            GeoPoint(45.05, 10.02),
+            GeoPoint(45.027, 10.015),
+            GeoPoint(44.973, 10.025)
+        )
+
+        stations.forEach { station ->
+            val exact = distancePointToRouteMeters(station, fullRoute) <= corridor
+            assertEquals(
+                exact,
+                pointIsWithinRouteCorridor(
+                    point = station,
+                    fullRoutePoints = fullRoute,
+                    simplifiedRoutePoints = simplifiedRoute,
+                    corridorMeters = corridor
+                )
+            )
+        }
+    }
 }

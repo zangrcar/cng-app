@@ -1,10 +1,14 @@
 package com.zangrcar.cngitaly
 
 import android.Manifest
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
+import android.location.LocationManager
 import android.os.Bundle
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,7 +21,11 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import com.zangrcar.cngitaly.data.geocoding.PlaceSearchResult
@@ -45,6 +53,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+internal enum class PendingLocationSettingsAction {
+    CENTER,
+    ROUTE
+}
+
 class MainActivity : ComponentActivity() {
     private val mainViewModel: MainViewModel by viewModels()
     private lateinit var mapView: MapView
@@ -59,6 +72,8 @@ class MainActivity : ComponentActivity() {
     private var routeMapLayer: RouteMapLayer? = null
     private var placeWaypointMapLayer: PlaceWaypointMapLayer? = null
     private var routeLocationRequest = false
+    private var pendingLocationSettingsAction: PendingLocationSettingsAction? = null
+    private var showLocationSettingsDialog by mutableStateOf(false)
     private val styleRequests = MapStyleRequestTracker()
     private val offlineMapManager by lazy { OfflineMapManager(filesDir) }
 
@@ -72,6 +87,31 @@ class MainActivity : ComponentActivity() {
             mainViewModel.setQuickSearchError("Location permission is required.")
         } else locationMessage = "Location permission is needed to show your current position."
     }
+
+    private val locationSettingsLauncher =
+        registerForActivityResult(
+            ActivityResultContracts.StartActivityForResult()
+        ) {
+            val action = pendingLocationSettingsAction
+            pendingLocationSettingsAction = null
+
+            if (!isDeviceLocationEnabled()) {
+                if (action == PendingLocationSettingsAction.ROUTE) {
+                    routeLocationRequest = false
+                }
+                return@registerForActivityResult
+            }
+
+            when (action) {
+                PendingLocationSettingsAction.CENTER ->
+                    requestCurrentLocationCenter()
+
+                PendingLocationSettingsAction.ROUTE ->
+                    requestCurrentLocationForRoute()
+
+                null -> Unit
+            }
+        }
 
     private val centerLocationCallback = object : LocationEngineCallback<LocationEngineResult> {
         override fun onSuccess(result: LocationEngineResult?) {
@@ -220,6 +260,35 @@ class MainActivity : ComponentActivity() {
                     onCancelNavigateLocationRequest = ::cancelRouteLocationRequest,
                     viewModel = mainViewModel
                 )
+
+                if (showLocationSettingsDialog) {
+                    AlertDialog(
+                        onDismissRequest = ::dismissLocationSettingsPrompt,
+                        title = {
+                            Text("Location is turned off")
+                        },
+                        text = {
+                            Text("Turn on Location to use your current position.")
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    showLocationSettingsDialog = false
+                                    locationSettingsLauncher.launch(
+                                        Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                                    )
+                                }
+                            ) {
+                                Text("Open settings")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = ::dismissLocationSettingsPrompt) {
+                                Text("Cancel")
+                            }
+                        }
+                    )
+                }
             }
         }
     }
@@ -309,6 +378,16 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun onCurrentLocationClick() {
+        if (shouldPromptForLocationSettings(isDeviceLocationEnabled())) {
+            pendingLocationSettingsAction = PendingLocationSettingsAction.CENTER
+            showLocationSettingsDialog = true
+            return
+        }
+
+        requestCurrentLocationCenter()
+    }
+
+    private fun requestCurrentLocationCenter() {
         if (hasForegroundLocationPermission()) {
             enableLocationAndCenter(showWaiting = true, forceCenter = true)
         } else {
@@ -319,6 +398,21 @@ class MainActivity : ComponentActivity() {
                 )
             )
         }
+    }
+
+    private fun isDeviceLocationEnabled(): Boolean {
+        val locationManager =
+            getSystemService(Context.LOCATION_SERVICE) as LocationManager
+
+        return LocationManagerCompat.isLocationEnabled(locationManager)
+    }
+
+    private fun dismissLocationSettingsPrompt() {
+        showLocationSettingsDialog = false
+        if (pendingLocationSettingsAction == PendingLocationSettingsAction.ROUTE) {
+            routeLocationRequest = false
+        }
+        pendingLocationSettingsAction = null
     }
 
     private fun hasForegroundLocationPermission(): Boolean =
@@ -474,6 +568,17 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun useCurrentLocationForRoute() {
+        if (shouldPromptForLocationSettings(isDeviceLocationEnabled())) {
+            routeLocationRequest = true
+            pendingLocationSettingsAction = PendingLocationSettingsAction.ROUTE
+            showLocationSettingsDialog = true
+            return
+        }
+
+        requestCurrentLocationForRoute()
+    }
+
+    private fun requestCurrentLocationForRoute() {
         if (!hasForegroundLocationPermission()) {
             routeLocationRequest = true
             permissionLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))

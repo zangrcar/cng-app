@@ -773,6 +773,20 @@ Phase 8C connectivity transition fix:
 - a unit test covers the `INTERNET` + `VALIDATED` capability truth table
 - Samsung Galaxy S23 retest is pending
 
+Phase 8C disabled device Location UX:
+- added the user-requested trip UX improvement for disabled Android Location
+  services: explicit current-location actions detect the device-wide Location
+  toggle before starting GPS resolution
+- disabled Location shows a Material prompt with Cancel and Open settings; Open
+  settings navigates to Android Location settings
+- returning with Location enabled automatically resumes the originally requested
+  CENTER or ROUTE action; returning without enabling it leaves no pending
+  route-location action and does not reopen the prompt
+- airplane mode remains independent, so GPS continues to work offline when
+  Location is enabled
+- the existing permission and 30-second GPS flows remain unchanged
+- physical Samsung Galaxy S23 verification is pending
+
 ## Important discoveries
 
 - MapLibre Android 13.x uses Vulkan for `org.maplibre.gl:android-sdk`; the explicit OpenGL artifact is `org.maplibre.gl:android-sdk-opengl:13.3.1`.

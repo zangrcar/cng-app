@@ -51,3 +51,7 @@ internal fun locationFailureAction(
 internal fun locationTimeoutShouldReport(
     pendingAction: ResolvedLocationAction
 ): Boolean = pendingAction != ResolvedLocationAction.NONE
+
+internal fun shouldPromptForLocationSettings(
+    locationEnabled: Boolean
+): Boolean = !locationEnabled

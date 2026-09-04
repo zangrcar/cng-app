@@ -102,4 +102,19 @@ class StationProjectionGuardTest {
             )
         )
     }
+
+    @Test
+    fun `disabled device location requires settings prompt`() {
+        assertTrue(
+            shouldPromptForLocationSettings(
+                locationEnabled = false
+            )
+        )
+
+        assertFalse(
+            shouldPromptForLocationSettings(
+                locationEnabled = true
+            )
+        )
+    }
 }

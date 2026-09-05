@@ -66,6 +66,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -202,14 +203,11 @@ fun MapScreen(
                     .padding(8.dp),
                 horizontalAlignment = Alignment.Start
             ) {
-                IconButton(
+                MapControlButton(
                     onClick = { coroutineScope.launch { drawerState.open() } },
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(Color.Black, CircleShape)
-                ) {
-                    Icon(Icons.Default.Menu, "Open menu", tint = Color.White)
-                }
+                    icon = Icons.Default.Menu,
+                    contentDescription = "Open menu"
+                )
                 Spacer(Modifier.height(8.dp))
                 DataStatusButton(
                     uiState = uiState,
@@ -220,34 +218,26 @@ fun MapScreen(
                     }
                 )
                 Spacer(Modifier.height(8.dp))
-                FilledIconButton(
+                MapControlButton(
                     onClick = {
                         viewModel.clearSelectedStation()
                         viewModel.clearPlaceSearch()
                         showPlaceSearch = true
                     },
-                    modifier = Modifier.size(48.dp),
-                    colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
-                        containerColor = Color.Black,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(Icons.Default.Search, "Search place")
-                }
+                    icon = Icons.Default.Search,
+                    contentDescription = "Search place"
+                )
                 if (activeRoute != null) {
                     Spacer(Modifier.height(8.dp))
-                    FilledIconButton(
+                    MapControlButton(
                         onClick = {
                             viewModel.clearSelectedStation()
                             viewModel.clearQuickSearch()
                             showAddStop = true
                         },
-                        modifier = Modifier.size(48.dp),
-                        colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
-                            containerColor = Color.Black,
-                            contentColor = Color.White
-                        )
-                    ) { Icon(Icons.Default.Add, "Add stop") }
+                        icon = Icons.Default.Add,
+                        contentDescription = "Add stop"
+                    )
                 }
             }
             if (activeRoute != null) {
@@ -265,15 +255,16 @@ fun MapScreen(
                     }
                 }
             }
-            FilledIconButton(
+            MapControlButton(
                 onClick = onCurrentLocationClick,
+                icon = Icons.Default.MyLocation,
+                contentDescription = "Current location",
+                iconColor = MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
                     .padding(16.dp)
-            ) {
-                Icon(Icons.Default.MyLocation, "Current location")
-            }
+            )
             if (searchedPlace != null) {
                 androidx.compose.material3.ExtendedFloatingActionButton(
                     onClick = {
@@ -375,6 +366,28 @@ fun MapScreen(
                     if (viewModel.addStopAndRecalculate(result)) closeQuickSheets()
                 }
             )
+        }
+    }
+}
+
+@Composable
+private fun MapControlButton(
+    onClick: () -> Unit,
+    icon: ImageVector,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    iconColor: Color = MaterialTheme.colorScheme.onSurface
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.size(48.dp),
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = iconColor,
+        shadowElevation = 4.dp
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription)
         }
     }
 }

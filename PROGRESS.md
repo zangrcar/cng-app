@@ -834,6 +834,9 @@ D1 visual work:
   the provided final raster artwork at the approved 75% foreground scale
 - D1b light-theme palette implementation is pending physical Samsung Galaxy S23
   verification
+- D1b light-theme physical review found that the hard-coded black map controls
+  did not match light mode; D1b.1 makes the non-semantic map controls theme-aware
+  while D1b physical approval remains pending retest
 - D1c dark theme remains pending
 - D2 search/navigation UX and D3 route editing remain pending
 

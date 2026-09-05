@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,8 +40,7 @@ import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.Button
@@ -70,13 +70,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -85,6 +91,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -117,6 +124,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.abs
 
 internal enum class DataStatus { FRESH, STALE, NO_DATA, OFFLINE }
 
@@ -1128,25 +1136,117 @@ private fun RouteDrawerEditor(
     onDone: () -> Unit
 ) {
     var corridorExpanded by remember { mutableStateOf(false) }
+    var draggingIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
+    val rowCenters = remember { mutableStateMapOf<Int, Float>() }
+    val currentEndpoints by rememberUpdatedState(endpoints)
+    val currentOnEndpointsChange by rememberUpdatedState(onEndpointsChange)
+
     endpoints.forEachIndexed { index, endpoint ->
-        val label = when (index) {
+        val role = when (index) {
             0 -> "From"
             endpoints.lastIndex -> "To"
-            else -> index.toString()
+            else -> "Stop $index"
         }
-        Text(label, style = MaterialTheme.typography.labelMedium)
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(endpoint.label, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (index in 1 until endpoints.lastIndex) {
-                IconButton(onClick = {
-                    onEndpointsChange(com.zangrcar.cngitaly.data.routing.QuickRouteActions.moveStop(endpoints, index, -1))
-                }) { Icon(Icons.Default.KeyboardArrowUp, "Move stop up") }
-                IconButton(onClick = {
-                    onEndpointsChange(com.zangrcar.cngitaly.data.routing.QuickRouteActions.moveStop(endpoints, index, 1))
-                }) { Icon(Icons.Default.KeyboardArrowDown, "Move stop down") }
-                IconButton(onClick = {
-                    onEndpointsChange(com.zangrcar.cngitaly.data.routing.QuickRouteActions.removeStop(endpoints, index))
-                }) { Icon(Icons.Default.Delete, "Remove stop") }
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .onGloballyPositioned { coordinates ->
+                    rowCenters[index] =
+                        coordinates.positionInParent().y + coordinates.size.height / 2f
+                }
+                .graphicsLayer {
+                    translationY = if (draggingIndex == index) dragOffsetY else 0f
+                }
+                .zIndex(if (draggingIndex == index) 1f else 0f),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RoutePositionMarker(index = index, lastIndex = endpoints.lastIndex)
+                Spacer(Modifier.size(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = role,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = endpoint.label,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (index in 1 until endpoints.lastIndex) {
+                    IconButton(onClick = {
+                        onEndpointsChange(
+                            com.zangrcar.cngitaly.data.routing.QuickRouteActions.removeStop(
+                                endpoints,
+                                index
+                            )
+                        )
+                    }) {
+                        Icon(Icons.Default.Delete, "Remove stop")
+                    }
+                }
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = {
+                                draggingIndex = index
+                                dragOffsetY = 0f
+                            },
+                            onDrag = { change, dragAmount ->
+                                change.consume()
+                                dragOffsetY += dragAmount.y
+
+                                val fromIndex = draggingIndex ?: return@detectDragGestures
+                                val fromCenter =
+                                    rowCenters[fromIndex] ?: return@detectDragGestures
+                                val draggedCenter = fromCenter + dragOffsetY
+                                val toIndex = rowCenters
+                                    .filterKeys { it in currentEndpoints.indices }
+                                    .minByOrNull { (_, center) ->
+                                        abs(center - draggedCenter)
+                                    }
+                                    ?.key
+                                    ?: return@detectDragGestures
+
+                                if (toIndex != fromIndex) {
+                                    val toCenter =
+                                        rowCenters[toIndex] ?: return@detectDragGestures
+                                    dragOffsetY -= toCenter - fromCenter
+                                    draggingIndex = toIndex
+                                    currentOnEndpointsChange(
+                                        com.zangrcar.cngitaly.data.routing.QuickRouteActions
+                                            .moveEndpoint(
+                                                currentEndpoints,
+                                                fromIndex,
+                                                toIndex
+                                            )
+                                    )
+                                }
+                            },
+                            onDragCancel = {
+                                draggingIndex = null
+                                dragOffsetY = 0f
+                            },
+                            onDragEnd = {
+                                draggingIndex = null
+                                dragOffsetY = 0f
+                            }
+                        )
+                    },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.DragHandle, "Drag to reorder route point")
+                }
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -1174,6 +1274,36 @@ private fun RouteDrawerEditor(
         onClick = if (action == com.zangrcar.cngitaly.data.routing.RouteDrawerAction.DONE) onDone else onApply,
         modifier = Modifier.fillMaxWidth()
     ) { Text(if (action == com.zangrcar.cngitaly.data.routing.RouteDrawerAction.DONE) "Done" else "Apply changes") }
+}
+
+@Composable
+private fun RoutePositionMarker(index: Int, lastIndex: Int) {
+    when (index) {
+        0 -> Box(
+            modifier = Modifier
+                .size(12.dp)
+                .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant, CircleShape)
+        )
+
+        lastIndex -> Box(
+            modifier = Modifier
+                .size(12.dp)
+                .background(MaterialTheme.colorScheme.primary, CircleShape)
+        )
+
+        else -> Box(
+            modifier = Modifier
+                .size(24.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = index.toString(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
 }
 
 @Composable

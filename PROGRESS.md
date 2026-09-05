@@ -845,10 +845,13 @@ D1 visual work:
   S23
 - D2b full-screen Navigate was physically approved on Samsung Galaxy S23,
   including its opaque edge-to-edge status-bar background
-- D2c converts Add stop from a bottom sheet to full-screen search; physical
-  Samsung Galaxy S23 verification is pending
-- after D2c approval, D2 search/navigation UX is complete
-- D3 route editor remains pending
+- D2c full-screen Add stop was physically approved on Samsung Galaxy S23; D2
+  search/navigation UX is complete
+- D3a replaces arrow-based intermediate-only ordering with drag-handle ordering
+  for all route endpoints
+- route roles now follow list position, so any endpoint may become From or To
+- D3a physical Samsung Galaxy S23 verification is pending
+- D3b corridor radius radio buttons remain pending
 
 ## Important discoveries
 

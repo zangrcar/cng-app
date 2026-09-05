@@ -15,10 +15,18 @@ object QuickRouteActions {
         return endpoints.toMutableList().apply { add(lastIndex, stop) }
     }
 
-    fun moveStop(endpoints: List<RouteEndpoint>, stopIndex: Int, direction: Int): List<RouteEndpoint> {
-        val target = stopIndex + direction
-        if (stopIndex !in 1 until endpoints.lastIndex || target !in 1 until endpoints.lastIndex) return endpoints
-        return endpoints.toMutableList().apply { add(target, removeAt(stopIndex)) }
+    fun moveEndpoint(
+        endpoints: List<RouteEndpoint>,
+        fromIndex: Int,
+        toIndex: Int
+    ): List<RouteEndpoint> {
+        if (fromIndex !in endpoints.indices || toIndex !in endpoints.indices || fromIndex == toIndex) {
+            return endpoints
+        }
+        return endpoints.toMutableList().apply {
+            val moved = removeAt(fromIndex)
+            add(toIndex, moved)
+        }
     }
 
     fun removeStop(endpoints: List<RouteEndpoint>, stopIndex: Int): List<RouteEndpoint> =

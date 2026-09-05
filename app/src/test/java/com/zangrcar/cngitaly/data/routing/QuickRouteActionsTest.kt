@@ -27,18 +27,74 @@ class QuickRouteActionsTest {
         assertEquals(listOf("From", "Florence", "Bologna", "To"), second.map { it.label })
     }
 
-    @Test fun `move and remove affect only stops`() {
+    @Test fun `remove affects only intermediate stops`() {
         val endpoints = listOf(endpoint("From"), endpoint("Florence"), endpoint("Bologna"), endpoint("To"))
-        assertEquals(
-            listOf("From", "Bologna", "Florence", "To"),
-            QuickRouteActions.moveStop(endpoints, 2, -1).map { it.label }
-        )
         assertEquals(
             listOf("From", "Florence", "To"),
             QuickRouteActions.removeStop(endpoints, 2).map { it.label }
         )
         assertEquals(endpoints, QuickRouteActions.removeStop(endpoints, 0))
-        assertEquals(endpoints, QuickRouteActions.moveStop(endpoints, 1, -1))
+        assertEquals(endpoints, QuickRouteActions.removeStop(endpoints, endpoints.lastIndex))
+    }
+
+    @Test fun `intermediate stop can become origin`() {
+        val endpoints = listOf(endpoint("From"), endpoint("Florence"), endpoint("To"))
+        assertEquals(
+            listOf("Florence", "From", "To"),
+            QuickRouteActions.moveEndpoint(endpoints, 1, 0).map { it.label }
+        )
+    }
+
+    @Test fun `intermediate stop can become destination`() {
+        val endpoints = listOf(endpoint("From"), endpoint("Florence"), endpoint("To"))
+        assertEquals(
+            listOf("From", "To", "Florence"),
+            QuickRouteActions.moveEndpoint(endpoints, 1, 2).map { it.label }
+        )
+    }
+
+    @Test fun `origin can become destination`() {
+        val endpoints = listOf(endpoint("From"), endpoint("Florence"), endpoint("To"))
+        assertEquals(
+            listOf("Florence", "To", "From"),
+            QuickRouteActions.moveEndpoint(endpoints, 0, 2).map { it.label }
+        )
+    }
+
+    @Test fun `destination can become origin`() {
+        val endpoints = listOf(endpoint("From"), endpoint("Florence"), endpoint("To"))
+        assertEquals(
+            listOf("To", "From", "Florence"),
+            QuickRouteActions.moveEndpoint(endpoints, 2, 0).map { it.label }
+        )
+    }
+
+    @Test fun `two endpoint route can reverse`() {
+        val endpoints = listOf(endpoint("From"), endpoint("To"))
+        assertEquals(
+            listOf("To", "From"),
+            QuickRouteActions.moveEndpoint(endpoints, 0, 1).map { it.label }
+        )
+    }
+
+    @Test fun `current location flag travels with moved endpoint`() {
+        val currentLocation = RouteEndpoint("My location", 1.0, 1.0, isCurrentLocation = true)
+        val endpoints = listOf(currentLocation, endpoint("Florence"), endpoint("To"))
+        val moved = QuickRouteActions.moveEndpoint(endpoints, 0, 2)
+
+        assertEquals(currentLocation, moved.last())
+        assertEquals(true, moved.last().isCurrentLocation)
+    }
+
+    @Test fun `invalid endpoint indexes return unchanged list`() {
+        val endpoints = listOf(endpoint("From"), endpoint("To"))
+        assertEquals(endpoints, QuickRouteActions.moveEndpoint(endpoints, -1, 0))
+        assertEquals(endpoints, QuickRouteActions.moveEndpoint(endpoints, 0, 2))
+    }
+
+    @Test fun `same endpoint index returns unchanged list`() {
+        val endpoints = listOf(endpoint("From"), endpoint("Florence"), endpoint("To"))
+        assertEquals(endpoints, QuickRouteActions.moveEndpoint(endpoints, 1, 1))
     }
 
     @Test fun `maximum endpoint count rejects another stop`() {
@@ -51,7 +107,7 @@ class QuickRouteActionsTest {
         assertEquals(RouteDrawerAction.DONE, routeDrawerAction(original, original.toList()))
         assertEquals(
             RouteDrawerAction.APPLY_ROUTE,
-            routeDrawerAction(original, QuickRouteActions.moveStop(original, 2, -1))
+            routeDrawerAction(original, QuickRouteActions.moveEndpoint(original, 2, 1))
         )
     }
 }

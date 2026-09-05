@@ -839,8 +839,12 @@ D1 visual work:
 - a persistent light/dark theme toggle was added to the drawer header
 - first launch follows the Android system theme until the user explicitly chooses
   a mode; that choice then persists across app restarts
-- final D1c/theme-toggle physical Samsung Galaxy S23 verification is pending
-- D2 search/navigation UX and D3 route editing remain pending
+- final D1c/theme-toggle behavior was physically approved on Samsung Galaxy S23;
+  D1 visual identity is complete
+- D2a replaces only the normal place-search bottom sheet with a full-screen
+  search surface; physical Samsung Galaxy S23 verification is pending
+- D2b navigation UX remains pending
+- D3 route editing remains pending
 
 ## Important discoveries
 

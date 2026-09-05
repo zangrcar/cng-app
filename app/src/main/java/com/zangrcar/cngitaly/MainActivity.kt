@@ -15,11 +15,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -247,7 +249,22 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { mainViewModel.searchedPlaceMarker.collect { placeWaypointMapLayer?.updatePlace(it) } }
         enableEdgeToEdge()
         setContent {
-            CNGItalyTheme {
+            val preferences = remember {
+                getSharedPreferences(CNG_UI_PREFS, Context.MODE_PRIVATE)
+            }
+            val systemDarkTheme = isSystemInDarkTheme()
+            var darkThemeOverride by remember {
+                mutableStateOf<Boolean?>(
+                    if (preferences.contains(DARK_THEME_OVERRIDE)) {
+                        preferences.getBoolean(DARK_THEME_OVERRIDE, false)
+                    } else {
+                        null
+                    }
+                )
+            }
+            val effectiveDarkTheme = darkThemeOverride ?: systemDarkTheme
+
+            CNGItalyTheme(darkTheme = effectiveDarkTheme) {
                 MapScreen(
                     mapView = mapView,
                     locationMessage = locationMessage,
@@ -258,6 +275,14 @@ class MainActivity : ComponentActivity() {
                     onPlaceSelected = ::centerMapOnPlace,
                     onUseNavigateLocation = ::useCurrentLocationForRoute,
                     onCancelNavigateLocationRequest = ::cancelRouteLocationRequest,
+                    isDarkTheme = effectiveDarkTheme,
+                    onToggleTheme = {
+                        val newValue = !effectiveDarkTheme
+                        darkThemeOverride = newValue
+                        preferences.edit()
+                            .putBoolean(DARK_THEME_OVERRIDE, newValue)
+                            .apply()
+                    },
                     viewModel = mainViewModel
                 )
 
@@ -674,6 +699,8 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        private const val CNG_UI_PREFS = "cng_ui_prefs"
+        private const val DARK_THEME_OVERRIDE = "dark_theme_override"
         private const val HAS_CENTERED_KEY = "has_centered_on_location"
         private const val MAP_STYLE_LOG_TAG = "CngMapStyle"
         private const val LOCATION_REQUEST_TIMEOUT_MILLIS = 30_000L

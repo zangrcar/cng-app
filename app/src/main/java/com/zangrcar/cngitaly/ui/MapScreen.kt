@@ -33,8 +33,10 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Directions
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
@@ -42,6 +44,7 @@ import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
@@ -118,6 +121,8 @@ fun MapScreen(
     onPlaceSelected: (PlaceSearchResult) -> Unit,
     onUseNavigateLocation: () -> Unit,
     onCancelNavigateLocationRequest: () -> Unit,
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
     viewModel: MainViewModel
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -182,6 +187,8 @@ fun MapScreen(
                     uiState = uiState,
                     activeRoute = activeRoute,
                     corridorSetting = corridorSetting,
+                    isDarkTheme = isDarkTheme,
+                    onToggleTheme = onToggleTheme,
                     onClose = { coroutineScope.launch { drawerState.close() } },
                     onRefresh = viewModel::refresh,
                     onCorridorChange = viewModel::setRouteCorridor,
@@ -206,7 +213,8 @@ fun MapScreen(
                 MapControlButton(
                     onClick = { coroutineScope.launch { drawerState.open() } },
                     icon = Icons.Default.Menu,
-                    contentDescription = "Open menu"
+                    contentDescription = "Open menu",
+                    isDarkTheme = isDarkTheme
                 )
                 Spacer(Modifier.height(8.dp))
                 DataStatusButton(
@@ -225,7 +233,8 @@ fun MapScreen(
                         showPlaceSearch = true
                     },
                     icon = Icons.Default.Search,
-                    contentDescription = "Search place"
+                    contentDescription = "Search place",
+                    isDarkTheme = isDarkTheme
                 )
                 if (activeRoute != null) {
                     Spacer(Modifier.height(8.dp))
@@ -236,7 +245,8 @@ fun MapScreen(
                             showAddStop = true
                         },
                         icon = Icons.Default.Add,
-                        contentDescription = "Add stop"
+                        contentDescription = "Add stop",
+                        isDarkTheme = isDarkTheme
                     )
                 }
             }
@@ -259,7 +269,8 @@ fun MapScreen(
                 onClick = onCurrentLocationClick,
                 icon = Icons.Default.MyLocation,
                 contentDescription = "Current location",
-                iconColor = MaterialTheme.colorScheme.primary,
+                isDarkTheme = isDarkTheme,
+                iconColor = if (isDarkTheme) Color.White else MaterialTheme.colorScheme.primary,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .navigationBarsPadding()
@@ -271,7 +282,13 @@ fun MapScreen(
                         viewModel.clearQuickSearch()
                         showNavigate = true
                     },
-                    icon = { Icon(Icons.Default.Directions, null) },
+                    icon = {
+                        Icon(
+                            Icons.Default.Directions,
+                            null,
+                            tint = if (isDarkTheme) Color.White else LocalContentColor.current
+                        )
+                    },
                     text = { Text("Navigate") },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -375,14 +392,15 @@ private fun MapControlButton(
     onClick: () -> Unit,
     icon: ImageVector,
     contentDescription: String,
+    isDarkTheme: Boolean,
     modifier: Modifier = Modifier,
-    iconColor: Color = MaterialTheme.colorScheme.onSurface
+    iconColor: Color = if (isDarkTheme) Color.White else MaterialTheme.colorScheme.onSurface
 ) {
     Surface(
         onClick = onClick,
         modifier = modifier.size(48.dp),
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface,
+        color = if (isDarkTheme) Color(0xFF234A6B) else MaterialTheme.colorScheme.surface,
         contentColor = iconColor,
         shadowElevation = 4.dp
     ) {
@@ -774,6 +792,8 @@ private fun DrawerContent(
     uiState: MainUiState,
     activeRoute: RouteResult?,
     corridorSetting: RouteCorridorSetting,
+    isDarkTheme: Boolean,
+    onToggleTheme: () -> Unit,
     onClose: () -> Unit,
     onRefresh: () -> Unit,
     onCorridorChange: (RouteCorridorSetting) -> Unit,
@@ -790,8 +810,24 @@ private fun DrawerContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("CNG Italy", style = MaterialTheme.typography.headlineSmall)
-            IconButton(onClick = onClose) {
-                Icon(Icons.Default.Close, "Close menu")
+            Row {
+                IconButton(onClick = onToggleTheme) {
+                    Icon(
+                        imageVector = if (isDarkTheme) {
+                            Icons.Default.LightMode
+                        } else {
+                            Icons.Default.DarkMode
+                        },
+                        contentDescription = if (isDarkTheme) {
+                            "Switch to light mode"
+                        } else {
+                            "Switch to dark mode"
+                        }
+                    )
+                }
+                IconButton(onClick = onClose) {
+                    Icon(Icons.Default.Close, "Close menu")
+                }
             }
         }
         Spacer(Modifier.height(24.dp))

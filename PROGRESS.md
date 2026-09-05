@@ -832,12 +832,14 @@ D1 visual work:
 - visual work is now split into independently verified steps
 - D1a launcher icon was physically approved on Samsung Galaxy S23 after using
   the provided final raster artwork at the approved 75% foreground scale
-- D1b light-theme palette implementation is pending physical Samsung Galaxy S23
-  verification
-- D1b light-theme physical review found that the hard-coded black map controls
-  did not match light mode; D1b.1 makes the non-semantic map controls theme-aware
-  while D1b physical approval remains pending retest
-- D1c dark theme remains pending
+- D1b light-theme palette and D1b.1 theme-aware map controls were physically
+  approved on Samsung Galaxy S23
+- D1c dark navy theme was visually approved, then refined to use muted dark-blue
+  and forest-green accents
+- a persistent light/dark theme toggle was added to the drawer header
+- first launch follows the Android system theme until the user explicitly chooses
+  a mode; that choice then persists across app restarts
+- final D1c/theme-toggle physical Samsung Galaxy S23 verification is pending
 - D2 search/navigation UX and D3 route editing remain pending
 
 ## Important discoveries

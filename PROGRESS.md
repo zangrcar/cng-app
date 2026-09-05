@@ -830,10 +830,12 @@ D1 visual work:
   because the launcher icon was too small/crude and the theme direction was not
   accepted
 - visual work is now split into independently verified steps
-- D1a is launcher icon only
-- D1b light theme, D1c dark theme, D2 search/navigation UX, and D3 route editing
-  remain pending
-- D1a physical launcher verification is pending
+- D1a launcher icon was physically approved on Samsung Galaxy S23 after using
+  the provided final raster artwork at the approved 75% foreground scale
+- D1b light-theme palette implementation is pending physical Samsung Galaxy S23
+  verification
+- D1c dark theme remains pending
+- D2 search/navigation UX and D3 route editing remain pending
 
 ## Important discoveries
 

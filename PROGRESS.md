@@ -847,11 +847,12 @@ D1 visual work:
   including its opaque edge-to-edge status-bar background
 - D2c full-screen Add stop was physically approved on Samsung Galaxy S23; D2
   search/navigation UX is complete
-- D3a replaces arrow-based intermediate-only ordering with drag-handle ordering
-  for all route endpoints
-- route roles now follow list position, so any endpoint may become From or To
-- D3a physical Samsung Galaxy S23 verification is pending
-- D3b corridor radius radio buttons remain pending
+- D3a draggable endpoint ordering was physically approved on Samsung Galaxy S23,
+  including instant drag and live dynamic reordering
+- route roles follow list position, so any endpoint may become From or To
+- D3b uses a compact route-corridor selector with Auto / 3 / 5 / 10 / 20 km;
+  selection remains immediate and physical Samsung Galaxy S23 verification is
+  pending
 
 ## Important discoveries
 

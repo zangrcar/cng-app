@@ -1251,20 +1251,40 @@ private fun RouteDrawerEditor(
         }
         Spacer(Modifier.height(8.dp))
     }
-    Text("Show stations within", style = MaterialTheme.typography.labelMedium)
-    Box {
-        OutlinedButton(onClick = { corridorExpanded = true }) { Text(corridorLabel(corridorSetting)); Text(" ▾") }
-        DropdownMenu(expanded = corridorExpanded, onDismissRequest = { corridorExpanded = false }) {
-            listOf(
-                RouteCorridorSetting.Auto,
-                RouteCorridorSetting.Fixed(3000.0),
-                RouteCorridorSetting.Fixed(5000.0),
-                RouteCorridorSetting.Fixed(10000.0),
-                RouteCorridorSetting.Fixed(20000.0)
-            ).forEach { option ->
-                DropdownMenuItem(text = { Text(corridorLabel(option)) }, onClick = {
-                    onCorridorChange(option); corridorExpanded = false
-                })
+    Spacer(Modifier.height(4.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            "Stations within route",
+            style = MaterialTheme.typography.labelMedium
+        )
+        Box {
+            OutlinedButton(onClick = { corridorExpanded = true }) {
+                Text(corridorLabel(corridorSetting))
+                Text(" ▾")
+            }
+            DropdownMenu(
+                expanded = corridorExpanded,
+                onDismissRequest = { corridorExpanded = false }
+            ) {
+                listOf(
+                    RouteCorridorSetting.Auto,
+                    RouteCorridorSetting.Fixed(3000.0),
+                    RouteCorridorSetting.Fixed(5000.0),
+                    RouteCorridorSetting.Fixed(10000.0),
+                    RouteCorridorSetting.Fixed(20000.0)
+                ).forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(corridorLabel(option)) },
+                        onClick = {
+                            onCorridorChange(option)
+                            corridorExpanded = false
+                        }
+                    )
+                }
             }
         }
     }

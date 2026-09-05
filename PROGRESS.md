@@ -841,10 +841,12 @@ D1 visual work:
   a mode; that choice then persists across app restarts
 - final D1c/theme-toggle behavior was physically approved on Samsung Galaxy S23;
   D1 visual identity is complete
-- D2a replaces only the normal place-search bottom sheet with a full-screen
-  search surface; physical Samsung Galaxy S23 verification is pending
-- D2b navigation UX remains pending
-- D3 route editing remains pending
+- D2a full-screen normal place search was physically approved on Samsung Galaxy
+  S23
+- D2b replaces the Navigate bottom sheet with full-screen route setup; physical
+  Samsung Galaxy S23 verification is pending
+- Add-stop UX remains pending
+- D3 route editor remains pending
 
 ## Important discoveries
 

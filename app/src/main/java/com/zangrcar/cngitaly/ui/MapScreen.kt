@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -340,7 +341,8 @@ fun MapScreen(
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
                 dismissOnClickOutside = false,
-                dismissOnBackPress = false
+                dismissOnBackPress = false,
+                decorFitsSystemWindows = false
             )
         ) {
             FullScreenPlaceSearch(
@@ -356,12 +358,16 @@ fun MapScreen(
         }
     }
     if (showNavigate && searchedPlace != null) {
-        ModalBottomSheet(
-            onDismissRequest = closeQuickSheets,
-            sheetState = taskSheetState,
-            properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
+        Dialog(
+            onDismissRequest = {},
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnClickOutside = false,
+                dismissOnBackPress = false,
+                decorFitsSystemWindows = false
+            )
         ) {
-            NavigateSheet(
+            FullScreenNavigate(
                 destination = searchedPlace,
                 state = quickSearch,
                 onQueryChange = viewModel::updateQuickSearch,
@@ -390,6 +396,226 @@ fun MapScreen(
                 onResultSelected = { result ->
                     if (viewModel.addStopAndRecalculate(result)) closeQuickSheets()
                 }
+            )
+        }
+    }
+}
+
+@Composable
+private fun FullScreenNavigate(
+    destination: PlaceSearchResult,
+    state: com.zangrcar.cngitaly.PlaceTypeaheadState,
+    onQueryChange: (String) -> Unit,
+    onSubmit: () -> Unit,
+    onUseLocation: () -> Unit,
+    onResultSelected: (PlaceSearchResult) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val destinationPrimary =
+        destination.name.takeIf { it.isNotBlank() } ?: destination.displayName
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(250)
+        focusRequester.requestFocus()
+        keyboard?.show()
+    }
+    BackHandler(enabled = !imeVisible) { onDismiss() }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                }
+                Text("Navigate", style = MaterialTheme.typography.titleLarge)
+            }
+            Row(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Column(
+                    modifier = Modifier
+                        .padding(top = 28.dp)
+                        .size(width = 24.dp, height = 108.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                shape = CircleShape
+                            )
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(width = 1.dp, height = 98.dp)
+                            .background(MaterialTheme.colorScheme.outlineVariant)
+                    )
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    OutlinedTextField(
+                        value = state.query,
+                        onValueChange = onQueryChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester),
+                        singleLine = true,
+                        shape = RoundedCornerShape(28.dp),
+                        placeholder = { Text("Choose starting point") },
+                        leadingIcon = {
+                            Icon(Icons.Default.Search, contentDescription = null)
+                        },
+                        trailingIcon = if (state.query.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { onQueryChange("") }) {
+                                    Icon(Icons.Default.Close, "Clear search")
+                                }
+                            }
+                        } else {
+                            null
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                if (com.zangrcar.cngitaly.shouldSearchPlaceQuery(state.query)) {
+                                    onSubmit()
+                                    keyboard?.hide()
+                                }
+                            }
+                        )
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                focusManager.clearFocus()
+                                keyboard?.hide()
+                                onUseLocation()
+                            }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.MyLocation,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.size(12.dp))
+                        Text("Your location", style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(
+                    modifier = Modifier
+                        .padding(top = 6.dp, start = 7.dp, end = 7.dp)
+                        .size(10.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                )
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 8.dp, bottom = 12.dp)
+                ) {
+                    Text(
+                        text = destinationPrimary,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (
+                        destination.displayName.isNotBlank() &&
+                        !destination.displayName.equals(destinationPrimary, ignoreCase = true)
+                    ) {
+                        Text(
+                            text = destination.displayName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+            }
+            if (state.isLoading) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+            state.error?.let { error ->
+                Text(
+                    text = error,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                itemsIndexed(state.results) { index, result ->
+                    val primary = result.name.takeIf { it.isNotBlank() } ?: result.displayName
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                focusManager.clearFocus()
+                                keyboard?.hide()
+                                onResultSelected(result)
+                            }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.size(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = primary,
+                                style = MaterialTheme.typography.bodyLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (
+                                result.displayName.isNotBlank() &&
+                                !result.displayName.equals(primary, ignoreCase = true)
+                            ) {
+                                Text(
+                                    text = result.displayName,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                    if (index < state.results.lastIndex) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
+            Text(
+                text = "Search data © OpenStreetMap contributors · Geocoding: Photon",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -609,48 +835,6 @@ private fun PlaceTaskSheet(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(16.dp))
-    }
-}
-
-@Composable
-private fun NavigateSheet(
-    destination: PlaceSearchResult,
-    state: com.zangrcar.cngitaly.PlaceTypeaheadState,
-    onQueryChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-    onUseLocation: () -> Unit,
-    onResultSelected: (PlaceSearchResult) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val focusManager = LocalFocusManager.current
-    val keyboard = LocalSoftwareKeyboardController.current
-    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    BackHandler(enabled = !imeVisible) { onDismiss() }
-    Column(Modifier.fillMaxWidth().heightIn(max = 720.dp).navigationBarsPadding()
-        .padding(horizontal = 24.dp, vertical = 8.dp)) {
-        Text("Navigate", style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(12.dp))
-        Text("TO", style = MaterialTheme.typography.labelMedium)
-        Text(destination.displayName, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        Spacer(Modifier.height(16.dp))
-        Text("FROM", style = MaterialTheme.typography.labelMedium)
-        PlaceTypeahead(
-            state = state,
-            placeholder = "Search starting place",
-            onQueryChange = onQueryChange,
-            onSubmit = onSubmit,
-            onResultSelected = {
-                focusManager.clearFocus(); keyboard?.hide(); onResultSelected(it)
-            }
-        )
-        OutlinedButton(onClick = {
-            focusManager.clearFocus(); keyboard?.hide(); onUseLocation()
-        }, Modifier.fillMaxWidth()) { Icon(Icons.Default.MyLocation, null); Text("Use my location") }
-        Spacer(Modifier.height(16.dp))
-        Text("Search data © OpenStreetMap contributors · Geocoding: Photon",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
     }
 }

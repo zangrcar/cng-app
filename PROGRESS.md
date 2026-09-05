@@ -825,17 +825,15 @@ Post-8C personal-build performance polish:
   faster; station refresh showed no meaningful perceptible speed difference,
   so no further refresh optimization is planned
 
-D1 visual identity foundation:
-- replaced the stock Android launcher artwork with a CNG Italy adaptive icon
-- added a monochrome themed launcher icon
-- replaced template/dynamic colors with fixed CNG Italy light and dark palettes
-- added consistent typography and shape foundations
-- softened map controls and existing surfaces without moving their locations
-- polished drawer, route summary, sheets, station details, and current search
-  field styling without changing navigation flows
-- D2 full-screen search/navigation UX and D3 draggable route editing remain
-  intentionally deferred
-- physical Samsung Galaxy S23 light/dark visual verification is pending
+D1 visual work:
+- initial combined visual pass was physically rejected on Samsung Galaxy S23
+  because the launcher icon was too small/crude and the theme direction was not
+  accepted
+- visual work is now split into independently verified steps
+- D1a is launcher icon only
+- D1b light theme, D1c dark theme, D2 search/navigation UX, and D3 route editing
+  remain pending
+- D1a physical launcher verification is pending
 
 ## Important discoveries
 

@@ -843,9 +843,11 @@ D1 visual work:
   D1 visual identity is complete
 - D2a full-screen normal place search was physically approved on Samsung Galaxy
   S23
-- D2b replaces the Navigate bottom sheet with full-screen route setup; physical
+- D2b full-screen Navigate was physically approved on Samsung Galaxy S23,
+  including its opaque edge-to-edge status-bar background
+- D2c converts Add stop from a bottom sheet to full-screen search; physical
   Samsung Galaxy S23 verification is pending
-- Add-stop UX remains pending
+- after D2c approval, D2 search/navigation UX is complete
 - D3 route editor remains pending
 
 ## Important discoveries

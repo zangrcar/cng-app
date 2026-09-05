@@ -55,7 +55,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.SnackbarHost
@@ -146,9 +145,6 @@ fun MapScreen(
     val isLiveDetailsLoading =
         viewModel.isLiveDetailsLoading.collectAsStateWithLifecycle().value
     val context = LocalContext.current
-    val taskSheetState = androidx.compose.material3.rememberModalBottomSheetState(
-        skipPartiallyExpanded = true
-    )
     var showPlaceSearch by remember { mutableStateOf(false) }
     var showNavigate by remember { mutableStateOf(false) }
     var showAddStop by remember { mutableStateOf(false) }
@@ -381,21 +377,24 @@ fun MapScreen(
         }
     }
     if (showAddStop && activeRoute != null) {
-        ModalBottomSheet(
-            onDismissRequest = closeQuickSheets,
-            sheetState = taskSheetState,
-            properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
+        Dialog(
+            onDismissRequest = {},
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                dismissOnClickOutside = false,
+                dismissOnBackPress = false,
+                decorFitsSystemWindows = false
+            )
         ) {
-            PlaceTaskSheet(
-                title = "Add stop",
+            FullScreenPlaceSearch(
                 state = quickSearch,
-                placeholder = "Search place",
                 onQueryChange = viewModel::updateQuickSearch,
                 onSubmit = viewModel::submitQuickSearch,
                 onDismiss = closeQuickSheets,
                 onResultSelected = { result ->
                     if (viewModel.addStopAndRecalculate(result)) closeQuickSheets()
-                }
+                },
+                placeholder = "Search stop to add"
             )
         }
     }
@@ -627,7 +626,8 @@ private fun FullScreenPlaceSearch(
     onQueryChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onDismiss: () -> Unit,
-    onResultSelected: (PlaceSearchResult) -> Unit
+    onResultSelected: (PlaceSearchResult) -> Unit,
+    placeholder: String = "Search Italian place or address"
 ) {
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -666,7 +666,7 @@ private fun FullScreenPlaceSearch(
                         .focusRequester(focusRequester),
                     singleLine = true,
                     shape = RoundedCornerShape(28.dp),
-                    placeholder = { Text("Search Italian place or address") },
+                    placeholder = { Text(placeholder) },
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = null)
                     },
@@ -794,88 +794,6 @@ private fun RouteSummary(route: RouteResult, onClear: () -> Unit, modifier: Modi
             IconButton(onClick = onClear, modifier = Modifier.size(32.dp)) {
                 Icon(Icons.Default.Close, "Clear route")
             }
-        }
-    }
-}
-
-@Composable
-private fun PlaceTaskSheet(
-    title: String,
-    state: com.zangrcar.cngitaly.PlaceTypeaheadState,
-    placeholder: String,
-    onQueryChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-    onDismiss: () -> Unit,
-    onResultSelected: (PlaceSearchResult) -> Unit
-) {
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    BackHandler(enabled = !imeVisible) { onDismiss() }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(max = 720.dp)
-            .navigationBarsPadding()
-            .padding(horizontal = 24.dp, vertical = 8.dp)
-    ) {
-        Text(title, style = MaterialTheme.typography.headlineSmall)
-        Spacer(Modifier.height(16.dp))
-        PlaceTypeahead(
-            state = state,
-            placeholder = placeholder,
-            onQueryChange = onQueryChange,
-            onSubmit = onSubmit,
-            onResultSelected = {
-                focusManager.clearFocus(); keyboardController?.hide(); onResultSelected(it)
-            }
-        )
-        Spacer(Modifier.height(16.dp))
-        Text("Search data © OpenStreetMap contributors · Geocoding: Photon",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(16.dp))
-    }
-}
-
-@Composable
-private fun PlaceTypeahead(
-    state: com.zangrcar.cngitaly.PlaceTypeaheadState,
-    placeholder: String,
-    onQueryChange: (String) -> Unit,
-    onSubmit: () -> Unit,
-    onResultSelected: (PlaceSearchResult) -> Unit
-) {
-    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
-    val keyboard = LocalSoftwareKeyboardController.current
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(250)
-        focusRequester.requestFocus()
-        keyboard?.show()
-    }
-    OutlinedTextField(
-        value = state.query,
-        onValueChange = onQueryChange,
-        modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
-        singleLine = true,
-        placeholder = { Text(placeholder) },
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActions(onSearch = {
-            if (com.zangrcar.cngitaly.shouldSearchPlaceQuery(state.query)) {
-                onSubmit(); keyboard?.hide()
-            }
-        })
-    )
-    if (state.isLoading) {
-        Spacer(Modifier.height(8.dp)); CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-    }
-    state.error?.let { Spacer(Modifier.height(8.dp)); Text(it, color = MaterialTheme.colorScheme.error) }
-    Column(Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
-        state.results.take(5).forEach { result ->
-            Text(result.displayName, Modifier.fillMaxWidth().clickable { onResultSelected(result) }
-                .padding(vertical = 14.dp), maxLines = 2, overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyLarge)
         }
     }
 }

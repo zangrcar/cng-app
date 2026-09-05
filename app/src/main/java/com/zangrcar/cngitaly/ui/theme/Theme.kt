@@ -54,6 +54,10 @@ private val LightColorScheme = lightColorScheme(
     onSecondary = OnCngGreenLight,
     secondaryContainer = CngGreenContainerLight,
     onSecondaryContainer = OnCngGreenContainerLight,
+    tertiary = CngTertiaryLight,
+    onTertiary = OnCngTertiaryLight,
+    tertiaryContainer = CngTertiaryContainerLight,
+    onTertiaryContainer = OnCngTertiaryContainerLight,
     background = BackgroundLight,
     onBackground = OnBackgroundLight,
     surface = SurfaceLight,
@@ -63,7 +67,21 @@ private val LightColorScheme = lightColorScheme(
     outline = OutlineLight,
     outlineVariant = OutlineVariantLight,
     error = ErrorLight,
-    onError = OnErrorLight
+    onError = OnErrorLight,
+    errorContainer = ErrorContainerLight,
+    onErrorContainer = OnErrorContainerLight,
+    inverseSurface = InverseSurfaceLight,
+    inverseOnSurface = InverseOnSurfaceLight,
+    inversePrimary = InversePrimaryLight,
+    surfaceTint = SurfaceTintLight,
+    scrim = ScrimLight,
+    surfaceDim = SurfaceDimLight,
+    surfaceBright = SurfaceBrightLight,
+    surfaceContainerLowest = SurfaceContainerLowestLight,
+    surfaceContainerLow = SurfaceContainerLowLight,
+    surfaceContainer = SurfaceContainerLight,
+    surfaceContainerHigh = SurfaceContainerHighLight,
+    surfaceContainerHighest = SurfaceContainerHighestLight
 )
 
 @Composable

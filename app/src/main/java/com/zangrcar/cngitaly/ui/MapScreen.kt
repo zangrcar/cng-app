@@ -772,13 +772,21 @@ private fun MapControlButton(
     contentDescription: String,
     isDarkTheme: Boolean,
     modifier: Modifier = Modifier,
-    iconColor: Color = if (isDarkTheme) Color.White else MaterialTheme.colorScheme.onSurface
+    iconColor: Color = if (isDarkTheme) {
+        Color.White
+    } else {
+        MaterialTheme.colorScheme.onPrimaryContainer
+    }
 ) {
     Surface(
         onClick = onClick,
         modifier = modifier.size(48.dp),
         shape = CircleShape,
-        color = if (isDarkTheme) Color(0xFF234A6B) else MaterialTheme.colorScheme.surface,
+        color = if (isDarkTheme) {
+            Color(0xFF234A6B)
+        } else {
+            MaterialTheme.colorScheme.primaryContainer
+        },
         contentColor = iconColor,
         shadowElevation = 4.dp
     ) {

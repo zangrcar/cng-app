@@ -851,8 +851,12 @@ D1 visual work:
   including instant drag and live dynamic reordering
 - route roles follow list position, so any endpoint may become From or To
 - D3b uses a compact route-corridor selector with Auto / 3 / 5 / 10 / 20 km;
-  selection remains immediate and physical Samsung Galaxy S23 verification is
-  pending
+  selection remains immediate and was physically approved on Samsung Galaxy S23;
+  D3 is complete
+- map visual redesign is deferred for later
+- light-theme polish replaces white/default surfaces with a cohesive soft-blue
+  surface system and muted green secondary palette; physical Samsung Galaxy S23
+  verification is pending
 
 ## Important discoveries
 
